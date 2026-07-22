@@ -30,6 +30,7 @@ public class StatusBar implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
+        Helper.requireTarget(Helper.AnswerPagerFragment, "com.zhihu.android.answer.module.pager.AnswerPagerFragment");
         Helper.findClass(classLoader, "com.zhihu.android.base.util.", 0, 2,
                 (Class<?> StatusBarUtil) -> {
                     String className = StatusBarUtil.getName();

@@ -58,6 +58,8 @@
 ## 帮助
 [Github Wiki](https://github.com/shatyuka/Zhiliao/wiki)
 
+开发和新版知乎适配请参阅 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
+
 ## 下载
 [Github Release](https://github.com/shatyuka/Zhiliao/releases/latest)
 

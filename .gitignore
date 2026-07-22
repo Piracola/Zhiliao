@@ -8,3 +8,4 @@
 .externalNativeBuild
 /backup
 app/.cxx
+targetapp/*

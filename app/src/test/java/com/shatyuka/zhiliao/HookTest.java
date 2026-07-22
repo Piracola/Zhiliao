@@ -4,6 +4,8 @@ import com.shatyuka.zhiliao.hooks.AnswerAd;
 import com.shatyuka.zhiliao.hooks.AnswerListAd;
 import com.shatyuka.zhiliao.hooks.Article;
 import com.shatyuka.zhiliao.hooks.AutoRefresh;
+import com.shatyuka.zhiliao.hooks.ColorMode;
+import com.shatyuka.zhiliao.hooks.CommentAd;
 import com.shatyuka.zhiliao.hooks.CustomFilter;
 import com.shatyuka.zhiliao.hooks.ExternLink;
 import com.shatyuka.zhiliao.hooks.FeedAd;
@@ -27,6 +29,7 @@ import com.shatyuka.zhiliao.hooks.StatusBar;
 import com.shatyuka.zhiliao.hooks.Tag;
 import com.shatyuka.zhiliao.hooks.ThirdPartyLogin;
 import com.shatyuka.zhiliao.hooks.VIPBanner;
+import com.shatyuka.zhiliao.hooks.WebView;
 import com.shatyuka.zhiliao.hooks.ZhihuPreference;
 
 import org.junit.Test;
@@ -49,8 +52,10 @@ public class HookTest {
     static LinkedList<PackageInfo> packageInfos = new LinkedList<>();
 
     static {
-        System.out.println((new File("")).getAbsolutePath());
-        File path = new File("test");
+        String configuredPath = System.getenv("ZHILIAO_TEST_DIR");
+        File path = configuredPath == null || configuredPath.isEmpty()
+                ? new File("test") : new File(configuredPath);
+        System.out.println("Hook test samples: " + path.getAbsolutePath());
         File[] files = path.listFiles();
         if (files != null) {
             for (File file : files) {
@@ -125,6 +130,11 @@ public class HookTest {
     @Test
     public void answerListAdTest() {
         checkHook(new AnswerListAd());
+    }
+
+    @Test
+    public void commentAdTest() {
+        checkHook(new CommentAd());
     }
 
     @Test
@@ -236,4 +246,15 @@ public class HookTest {
     public void fullScreen() {
         checkHook(new FullScreen());
     }
+
+    @Test
+    public void colorModeTest() {
+        checkHook(new ColorMode());
+    }
+
+    @Test
+    public void webViewTest() {
+        checkHook(new WebView());
+    }
+
 }

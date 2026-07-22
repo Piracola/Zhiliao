@@ -76,12 +76,25 @@ public class Hooks {
         for (IHook hook : hooks) {
             try {
                 hook.init(classLoader);
+            } catch (Throwable e) {
+                reportFailure(hook, "目标定位", e);
+                continue;
+            }
+            try {
                 hook.hook();
             } catch (Throwable e) {
-                if (!Helper.prefs.getBoolean("switch_hidetoast", false))
-                    Helper.toast(hook.getName() + "功能加载失败，可能不支持当前版本知乎: " + Helper.packageInfo.versionName, Toast.LENGTH_LONG);
-                XposedBridge.log("[Zhiliao] " + e);
+                reportFailure(hook, "Hook安装", e);
             }
         }
+    }
+
+    private static void reportFailure(IHook hook, String phase, Throwable error) {
+        if (!Helper.prefs.getBoolean("switch_hidetoast", false)) {
+            Helper.toast(hook.getName() + "功能加载失败，可能不支持当前版本知乎: "
+                    + Helper.packageInfo.versionName, Toast.LENGTH_LONG);
+        }
+        XposedBridge.log("[Zhiliao][兼容性][" + Helper.packageInfo.versionName + "/"
+                + Helper.versionCode + "][" + hook.getName() + "][" + phase + "] " + error);
+        XposedBridge.log(error);
     }
 }

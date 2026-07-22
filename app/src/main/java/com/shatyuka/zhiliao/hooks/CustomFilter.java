@@ -47,6 +47,7 @@ public class CustomFilter implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
+        Helper.requireTarget(Helper.DataUnique_type, "com.zhihu.android.api.model.template.DataUnique.type");
         InnerDeserializer = classLoader.loadClass("com.zhihu.android.api.util.ZHObjectRegistryCenter$InnerDeserializer");
         ApiTemplateRoot = classLoader.loadClass("com.zhihu.android.api.model.template.api.ApiTemplateRoot");
         ApiFeedCard = classLoader.loadClass("com.zhihu.android.api.model.template.api.ApiFeedCard");

@@ -27,6 +27,7 @@ public class FeedAd implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
+        Helper.requireTarget(Helper.MorphAdHelper, "com.zhihu.android.morph.ad.utils.MorphAdHelper");
         BasePagingFragment = classLoader.loadClass("com.zhihu.android.app.ui.fragment.paging.BasePagingFragment");
         try {
             FeedAdvert = classLoader.loadClass("com.zhihu.android.api.model.FeedAdvert");

@@ -23,6 +23,7 @@ public class AnswerAd implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
+        Helper.requireTarget(Helper.IZhihuWebView, "com.zhihu.android.app.mercury.api.IZhihuWebView");
         Class<?> AppView = classLoader.loadClass("com.zhihu.android.answer.module.content.appview.AnswerAppView").getSuperclass();
         if (AppView == null)
             throw new ClassNotFoundException("com.zhihu.android.appview.AppView");

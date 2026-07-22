@@ -22,6 +22,7 @@ import android.widget.Toast;
 
 import com.shatyuka.zhiliao.Helper;
 import com.shatyuka.zhiliao.R;
+import com.shatyuka.zhiliao.TargetResolver;
 
 import org.xmlpull.v1.XmlPullParser;
 
@@ -137,25 +138,54 @@ public class ZhihuPreference implements IHook {
         ListPreference = classLoader.loadClass("androidx.preference.ListPreference");
         TooltipCompat = classLoader.loadClass("androidx.appcompat.widget.TooltipCompat");
 
-        try {
-            findPreference = SettingsFragment.getMethod("a", CharSequence.class);
-            setSummary = Preference.getMethod("a", CharSequence.class);
-            setIcon = Preference.getMethod("a", Drawable.class);
-            setVisible = Preference.getMethod("c", boolean.class);
-            getKey = Preference.getMethod("C");
-            setChecked = SwitchPreference.getMethod("g", boolean.class);
-            getText = EditTextPreference.getMethod("i");
-            getResourceId_MethodName = "v";
-        } catch (NoSuchMethodException ignore) {
-            findPreference = Helper.getMethodByParameterTypes(BasePreferenceFragment.getSuperclass(), CharSequence.class);
-            setSummary = Preference.getMethod("B0", CharSequence.class);
-            setIcon = Preference.getMethod("r0", Drawable.class);
-            setVisible = Preference.getMethod("E0", boolean.class);
-            getKey = Preference.getMethod("o");
-            setChecked = SwitchPreference.getMethod("O0", boolean.class);
-            getText = EditTextPreference.getMethod("R0");
-            getResourceId_MethodName = "p";
-        }
+        findPreference = TargetResolver.requireMethod(BasePreferenceFragment.getSuperclass(), true, 0,
+                "findPreference(CharSequence)", method ->
+                        method.getParameterCount() == 1
+                                && method.getParameterTypes()[0] == CharSequence.class
+                                && Preference.isAssignableFrom(method.getReturnType()));
+
+        // AndroidX public methods are renamed together by R8. Their signatures and relative order
+        // stay stable across the supported versions, so resolve by structure instead of a name.
+        setSummary = TargetResolver.requireMethod(Preference, false, 0,
+                "setSummary(CharSequence)", method ->
+                        Modifier.isPublic(method.getModifiers())
+                                && method.getReturnType() == void.class
+                                && Arrays.equals(method.getParameterTypes(), new Class<?>[]{CharSequence.class}));
+        setIcon = TargetResolver.requireMethod(Preference, false, 0,
+                "setIcon(Drawable)", method ->
+                        Modifier.isPublic(method.getModifiers())
+                                && method.getReturnType() == void.class
+                                && Arrays.equals(method.getParameterTypes(), new Class<?>[]{Drawable.class}));
+        setVisible = TargetResolver.requireMethod(Preference, false, 0,
+                "setVisible(boolean)", method ->
+                        Modifier.isPublic(method.getModifiers())
+                                && Modifier.isFinal(method.getModifiers())
+                                && method.getReturnType() == void.class
+                                && Arrays.equals(method.getParameterTypes(), new Class<?>[]{boolean.class}));
+        getKey = TargetResolver.requireMethod(Preference, false, 1,
+                "getKey()", method ->
+                        Modifier.isPublic(method.getModifiers())
+                                && method.getReturnType() == String.class
+                                && method.getParameterCount() == 0
+                                && !"toString".equals(method.getName()));
+        setChecked = TargetResolver.requireMethod(SwitchPreference.getSuperclass(), false, 0,
+                "setChecked(boolean)", method ->
+                        Modifier.isPublic(method.getModifiers())
+                                && method.getReturnType() == void.class
+                                && Arrays.equals(method.getParameterTypes(), new Class<?>[]{boolean.class}));
+        getText = TargetResolver.requireMethod(EditTextPreference, false, 0,
+                "getText()", method ->
+                        Modifier.isPublic(method.getModifiers())
+                                && method.getReturnType() == String.class
+                                && method.getParameterCount() == 0);
+        Method getResourceId = TargetResolver.requireMethod(Preference, false, 0,
+                "getLayoutResource()", method ->
+                        Modifier.isPublic(method.getModifiers())
+                                && Modifier.isFinal(method.getModifiers())
+                                && method.getReturnType() == int.class
+                                && method.getParameterCount() == 0
+                                && Character.isLowerCase(method.getName().charAt(0)));
+        getResourceId_MethodName = getResourceId.getName();
 
         getLayoutResId_MethodName = Arrays.stream(BasePreferenceFragment.getDeclaredMethods())
                 .filter(method -> Modifier.isAbstract(method.getModifiers())

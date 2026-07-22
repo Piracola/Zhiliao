@@ -44,6 +44,7 @@ public class WebView implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
+        Helper.requireTarget(Helper.WebViewClientWrapper, "com.zhihu.android.app.mercury.web.WebViewClientWrapper");
         answerAppView = classLoader.loadClass("com.zhihu.android.answer.module.content.appview.AnswerAppView");
     }
 

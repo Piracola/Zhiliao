@@ -74,24 +74,46 @@ public class Helper {
             return true;
         } catch (Exception e) {
             XposedBridge.log("[Zhiliao] " + e);
+            XposedBridge.log(e);
             return false;
         }
     }
 
     public static void initSharedClasses(ClassLoader classLoader) throws Exception {
-        MorphAdHelper = classLoader.loadClass("com.zhihu.android.morph.ad.utils.MorphAdHelper");
-        AnswerPagerFragment = classLoader.loadClass("com.zhihu.android.answer.module.pager.AnswerPagerFragment");
+        MorphAdHelper = loadClassOrNull(classLoader, "com.zhihu.android.morph.ad.utils.MorphAdHelper");
+        AnswerPagerFragment = loadClassOrNull(classLoader, "com.zhihu.android.answer.module.pager.AnswerPagerFragment");
         try {
             IZhihuWebView = classLoader.loadClass("com.zhihu.android.app.mercury.api.IZhihuWebView");
-        } catch (ClassNotFoundException ignore) {
-            IZhihuWebView = classLoader.loadClass("com.zhihu.android.app.search.ui.widget.SearchResultLayout").getDeclaredField("c").getType();
+        } catch (ReflectiveOperationException | LinkageError ignore) {
+            try {
+                IZhihuWebView = classLoader.loadClass("com.zhihu.android.app.search.ui.widget.SearchResultLayout").getDeclaredField("c").getType();
+            } catch (ReflectiveOperationException | LinkageError ignored) {
+                IZhihuWebView = null;
+            }
         }
         WebViewClientWrapper = findClass(classLoader, "com.zhihu.android.app.mercury.web.", 0, 2,
                 (Class<?> clazz) -> clazz.getSuperclass() == WebViewClient.class);
-        if (WebViewClientWrapper == null)
-            throw new ClassNotFoundException("com.zhihu.android.app.mercury.web.WebViewClientWrapper");
+        try {
+            Class<?> dataUnique = classLoader.loadClass("com.zhihu.android.api.model.template.DataUnique");
+            DataUnique_type = dataUnique.getField("type");
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            DataUnique_type = null;
+        }
+    }
 
-        DataUnique_type = classLoader.loadClass("com.zhihu.android.api.model.template.DataUnique").getField("type");
+    private static Class<?> loadClassOrNull(ClassLoader classLoader, String name) {
+        try {
+            return classLoader.loadClass(name);
+        } catch (ClassNotFoundException | LinkageError ignored) {
+            return null;
+        }
+    }
+
+    public static <T> T requireTarget(T target, String description) throws ClassNotFoundException {
+        if (target == null) {
+            throw new ClassNotFoundException(description);
+        }
+        return target;
     }
 
     public static Pattern compileRegex(String regex) {
@@ -169,56 +191,7 @@ public class Helper {
     }
 
     public static Class<?> findClass(ClassLoader classLoader, String beginWith, int cycleStart, int cycleRound, IClassCheck check) {
-        int count = (cycleStart + cycleRound) * 26;
-        for (int i = cycleStart * 26; i < count; i++) {
-            String className = beginWith + index2Str(i);
-            try {
-                Class<?> clazz = classLoader.loadClass(className);
-                if (check.check(clazz)) {
-                    return clazz;
-                }
-            } catch (Exception ignored) {
-            }
-            if (i > 26) {
-                String classNameNew = beginWith + index2StrNew(i);
-                try {
-                    Class<?> clazz = classLoader.loadClass(classNameNew);
-                    if (check.check(clazz)) {
-                        return clazz;
-                    }
-                } catch (Exception ignored) {
-                }
-            }
-        }
-        return null;
-    }
-
-    // a...z, aa...az, ba...bz
-    private static String index2Str(int n) {
-        StringBuilder result = new StringBuilder();
-        while (n != 0) {
-            int m = n % 26;
-            if (m == 0) {
-                result.insert(0, 'z');
-                n = n / 26 - 1;
-            } else {
-                result.insert(0, (char) ('a' + m - 1));
-                n /= 26;
-            }
-        }
-        return result.toString();
-    }
-
-    // a...z, a0...z0, a1...z1
-    private static String index2StrNew(int n) {
-        StringBuilder result = new StringBuilder();
-        int m = n % 26;
-        result.insert(0, (char) ('a' + m));
-        int cnt = n / 26;
-        if (cnt > 0) {
-            result.append(cnt - 1);
-        }
-        return result.toString();
+        return TargetResolver.findObfuscatedClass(classLoader, beginWith, cycleStart, cycleRound, check::check);
     }
 
     public static Method getMethodByParameterTypes(Class<?> clazz, Class<?>... parameterTypes) {
