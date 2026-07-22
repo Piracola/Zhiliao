@@ -3,11 +3,15 @@ name: Android CI
 on:
   push:
     branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.event.head_commit.message, '[skip ci]') }}
+    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, '[skip ci]') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -18,11 +22,12 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: 17
+          cache: gradle
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@master
       - name: Retrieve version
         run: |
-          COMMIT_HASH=$(echo ${{ github.event.head_commit.id }} | head -c 7)
+          COMMIT_HASH=$(echo "$GITHUB_SHA" | head -c 7)
           APP_VER_NAME=$(grep '^appVerName=' gradle.properties | cut -d'=' -f2)
           echo VERSION=${APP_VER_NAME}_${COMMIT_HASH} >> $GITHUB_ENV
       - name: Write key
@@ -35,6 +40,8 @@ jobs:
             echo releaseStoreFile='${{ github.workspace }}/key.jks' >> gradle.properties
             echo ${{ secrets.KEY_STORE }} | base64 --decode > key.jks
           fi
+      - name: Test compatibility resolvers
+        run: bash ./gradlew testDebugUnitTest
       - name: Build with Gradle
         run: bash ./gradlew -PappVerName=${{ env.VERSION }} assembleRelease
       - name: Upload built apk
@@ -44,10 +51,14 @@ jobs:
           name: Zhiliao_${{ env.VERSION }}
           path: ${{ github.workspace }}/app/build/outputs/apk/release
       - name: Send commit to telegram
+        if: ${{ success() && github.event_name == 'push' && env.TELEGRAM_TO != '' && env.TELEGRAM_TOKEN != '' }}
         uses: appleboy/telegram-action@master
+        env:
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
         with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_TOKEN }}
+          to: ${{ env.TELEGRAM_TO }}
+          token: ${{ env.TELEGRAM_TOKEN }}
           format: markdown
           message: |+
             New push to github!
