@@ -1,6 +1,6 @@
 # 知乎 11.10.0 (41012) 暗水印去除能力审计报告
 
-- 审计对象：知了模块 26.02.03（202602030）的设置项 `switch_watermark`「去除背景盲水印」
+- 审计对象：知了模块 26.02.03（202602030，当时版本；现役 26.09.24）的设置项 `switch_watermark`「去除背景盲水印」
 - 模块侧证据：`app/src/main/java/com/shatyuka/zhiliao/hooks/WebView.java`、`app/src/main/res/xml/preferences_zhihu.xml`
 - App 侧证据：`targetapp/jars/11.10.0 41012.jar`（178,320 个类，其中 `com/zhihu/**` 128,482 个，逐个常量池扫描，含 `watermark`（忽略大小写）的类 134 个）＋ `targetapp/*.apk` 的 `assets/**`（706 项，含 `assets/tornado/*.json` 路由配置）
 - 审计方式：静态审计（模块源码 + 整包常量池扫描 + assets 扫描）。真机实测**未执行**，验证方案见 §六

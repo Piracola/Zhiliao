@@ -14,6 +14,8 @@
 | ❌ 已失效（静默/报错） | 7 | Horizontal(左右划)、FeedTopHotBanner、HeadZoneBanner、VIPBanner、FullScreen、LiveButton、AutoRefresh（处置见 §六） |
 
 > 注：上表按"是否有功能级失效"划分；RedDot 实为 8/12 路径仍有效，AutoRefresh 为 2 处失效（含 1 处 P0）。
+>
+> 本表是 2026-09-24 的审计快照，不是现役结论：AutoRefresh 已按真机目标重写并通过真机验证（见 §二.7、§六），其余条目以 §六 修复进展为准。
 
 ## 二、已失效项（必须修）
 
@@ -65,7 +67,7 @@
 | 项目 | 方法 | 结果 |
 |---|---|---|
 | 模块加载 | `/proc/<pid>/fd` 持有模块 APK、`libzhiliao.so` 已映射 | ✅ 注入成功 |
-| 设置页注入 | `zhihu://app/settings` 打开知乎设置 | ✅ 「知了 / 当前版本 26.02.03」正常显示 |
+| 设置页注入 | `zhihu://app/settings` 打开知乎设置 | ✅ 「知了 / 当前版本 26.02.03」（当时的模块版本）正常显示 |
 | 启动页广告 | 冷启动连续 10 次采样找"跳过/广告"标记 | ✅ 直接进 MainActivity，无广告痕迹 |
 | 推荐流 | 滚动 6 屏 dump 检查"广告/推广/视频/播放"标记 | ✅ 均无命中 |
 | 直播入口 | 首页 dump 检查"直播" | ✅ 无（switch_livebutton 生效） |
