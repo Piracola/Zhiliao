@@ -9,23 +9,18 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.AttributeSet;
-import android.util.TypedValue;
-import android.view.LayoutInflater;
+import android.view.inputmethod.InputMethodManager;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.SeekBar;
-import android.widget.TextView;
 import android.widget.Toast;
-
 import com.shatyuka.zhiliao.Helper;
 import com.shatyuka.zhiliao.R;
 import com.shatyuka.zhiliao.TargetResolver;
-
-import org.xmlpull.v1.XmlPullParser;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XC_MethodReplacement;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
+import com.shatyuka.zhiliao.xposed.XposedHelpers;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -33,11 +28,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Random;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
+import org.xmlpull.v1.XmlPullParser;
 
 @SuppressWarnings("deprecation")
 public class ZhihuPreference implements IHook {
@@ -50,7 +41,6 @@ public class ZhihuPreference implements IHook {
 
     private static int settings_res_id = 0;
     private static int debug_res_id = 0;
-    private static int preference_seekbar_res_id = 0;
 
     static Class<?> SettingsFragment;
     static Class<?> DebugFragment;
@@ -67,8 +57,6 @@ public class ZhihuPreference implements IHook {
     static Class<?> BasePreferenceFragment;
     static Class<?> PreferenceGroup;
     static Class<?> EditTextPreference;
-    static Class<?> SeekBarPreference;
-    static Class<?> OnSeekBarChangeListener;
     static Class<?> ListPreference;
     static Class<?> TooltipCompat;
 
@@ -88,10 +76,11 @@ public class ZhihuPreference implements IHook {
     static Method inflate;
     static Method setTooltipText;
     static Method startFragment;
+    static Method onCreatePreferences;
+    static Method onPreferenceChange;
+    static Method inflateFromResource;
+    static Method EditTextPreference_setText;
 
-    static Field SeekBarPreference_mMin;
-    static Field SeekBarPreference_mSeekBarValueTextView;
-    static Field OnSeekBarChangeListener_seekBarPreferenceInstance;
     static Field ListPreference_mEntries;
     static Field ListPreference_mEntryValues;
 
@@ -129,12 +118,6 @@ public class ZhihuPreference implements IHook {
         BasePreferenceFragment = classLoader.loadClass("com.zhihu.android.app.ui.fragment.BasePreferenceFragment");
         PreferenceGroup = classLoader.loadClass("androidx.preference.PreferenceGroup");
         EditTextPreference = classLoader.loadClass("androidx.preference.EditTextPreference");
-        SeekBarPreference = classLoader.loadClass("androidx.preference.SeekBarPreference");
-        try {
-            OnSeekBarChangeListener = classLoader.loadClass("androidx.preference.SeekBarPreference$1");
-        } catch (ClassNotFoundException e) {
-            OnSeekBarChangeListener = classLoader.loadClass("androidx.preference.SeekBarPreference$a");
-        }
         ListPreference = classLoader.loadClass("androidx.preference.ListPreference");
         TooltipCompat = classLoader.loadClass("androidx.appcompat.widget.TooltipCompat");
 
@@ -219,33 +202,19 @@ public class ZhihuPreference implements IHook {
         getContext = BasePreferenceFragment.getMethod("getContext");
         setTooltipText = TooltipCompat.getMethod("setTooltipText", View.class, CharSequence.class);
         startFragment = Helper.getMethodByParameterTypes(BasePreferenceFragment, ZHIntent);
-
+        onCreatePreferences = Helper.requireTarget(Helper.getMethodByParameterTypes(BasePreferenceFragment, Bundle.class, String.class), "BasePreferenceFragment.onCreatePreferences");
+        onPreferenceChange = Helper.requireTarget(Helper.getMethodByParameterTypes(DebugFragment, Preference, Object.class), "DebugFragment.onPreferenceChange");
+        inflateFromResource = Helper.requireTarget(Helper.getMethodByParameterTypes(PreferenceInflater, int.class, PreferenceGroup), "PreferenceInflater.inflateFromResource");
+        EditTextPreference_setText = Helper.requireTarget(Helper.getMethodByParameterTypes(EditTextPreference, String.class), "EditTextPreference.setText");
         try {
-            SeekBarPreference_mMin = SeekBarPreference.getDeclaredField("b");
-            SeekBarPreference_mMin.setAccessible(true);
-            SeekBarPreference_mSeekBarValueTextView = SeekBarPreference.getDeclaredField("h");
-            SeekBarPreference_mSeekBarValueTextView.setAccessible(true);
-            OnSeekBarChangeListener_seekBarPreferenceInstance = OnSeekBarChangeListener.getDeclaredField("a");
-            OnSeekBarChangeListener_seekBarPreferenceInstance.setAccessible(true);
             ListPreference_mEntries = ListPreference.getDeclaredField("a");
-            ListPreference_mEntries.setAccessible(true);
             ListPreference_mEntryValues = ListPreference.getDeclaredField("b");
-            ListPreference_mEntryValues.setAccessible(true);
         } catch (NoSuchFieldException e) {
-            SeekBarPreference_mMin = SeekBarPreference.getDeclaredField("Y");
-            SeekBarPreference_mMin.setAccessible(true);
-            SeekBarPreference_mSeekBarValueTextView = Helper.findFieldByType(SeekBarPreference, TextView.class);
-            if (SeekBarPreference_mSeekBarValueTextView == null) {
-                throw new NoSuchFieldException("mSeekBarValueTextView");
-            }
-            SeekBarPreference_mSeekBarValueTextView.setAccessible(true);
-            OnSeekBarChangeListener_seekBarPreferenceInstance = OnSeekBarChangeListener.getDeclaredField("j");
-            OnSeekBarChangeListener_seekBarPreferenceInstance.setAccessible(true);
             ListPreference_mEntries = ListPreference.getDeclaredFields()[0];
-            ListPreference_mEntries.setAccessible(true);
             ListPreference_mEntryValues = ListPreference.getDeclaredFields()[1];
-            ListPreference_mEntryValues.setAccessible(true);
         }
+        ListPreference_mEntries.setAccessible(true);
+        ListPreference_mEntryValues.setAccessible(true);
 
         ZHIntent_ctor = ZHIntent.getConstructor(Class.class, Bundle.class, String.class, Array.newInstance(PageInfoType, 0).getClass());
         onPreferenceClick_MethodName = Helper.getMethodByParameterTypes(OnPreferenceClickListener, Preference).getName();
@@ -253,7 +222,7 @@ public class ZhihuPreference implements IHook {
 
     @Override
     public void hook() throws Throwable {
-        XposedBridge.hookMethod(Helper.getMethodByParameterTypes(PreferenceInflater, int.class, PreferenceGroup), new XC_MethodHook() {
+        XposedBridge.hookMethod(inflateFromResource, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 XmlResourceParser parser;
@@ -304,53 +273,6 @@ public class ZhihuPreference implements IHook {
             });
         }
 
-        XposedHelpers.findAndHookMethod(Preference, getResourceId_MethodName, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                if ("seekbar_sensitivity".equals(getKey.invoke(param.thisObject))) {
-                    preference_seekbar_res_id = (int) param.getResult();
-                }
-            }
-        });
-
-        XposedHelpers.findAndHookMethod(LayoutInflater.class, "inflate", int.class, ViewGroup.class, boolean.class, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) {
-                int id = (int) param.args[0];
-                if (id == preference_seekbar_res_id) {
-                    ViewGroup viewGroup = (ViewGroup) param.getResult();
-                    final int _4dp = (int) (Helper.scale * 4 + 0.5);
-                    final int _12dp = (int) (Helper.scale * 12 + 0.5);
-
-                    View iconFrame = viewGroup.getChildAt(0);
-                    iconFrame.setPadding(0, _4dp, _12dp, _4dp);
-
-                    ViewGroup childViewGroup = (ViewGroup) viewGroup.getChildAt(1);
-                    TextView title = (TextView) childViewGroup.getChildAt(0);
-                    title.setTextColor(Helper.getDarkMode() ? 0xffd3d3d3 : 0xff444444);
-
-                    TextView summary = (TextView) childViewGroup.getChildAt(1);
-                    summary.setTextColor(Helper.getDarkMode() ? 0xff999999 : 0xff121212);
-                    summary.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-
-                    TextView seekbarValue = (TextView) ((ViewGroup) childViewGroup.getChildAt(2)).getChildAt(1);
-                    seekbarValue.setTextColor(Helper.getDarkMode() ? 0xffd3d3d3 : 0xff444444);
-
-                    View divideLine = LayoutInflater.from(Helper.context).inflate(Helper.modRes.getLayout(R.layout.layout_divide_line), viewGroup, false);
-                    divideLine.setBackgroundColor(Helper.getDarkMode() ? 0xff1b1b1b : 0xffebebeb);
-                    LinearLayout root = new LinearLayout(Helper.context);
-                    {
-                        ViewGroup.LayoutParams layoutParams = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                        root.setOrientation(LinearLayout.VERTICAL);
-                        root.setLayoutParams(layoutParams);
-                        root.addView(viewGroup);
-                        root.addView(divideLine);
-                    }
-                    param.setResult(root);
-                }
-            }
-        });
-
         XposedHelpers.findAndHookMethod(SettingsFragment, "onCreate", Bundle.class, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -371,7 +293,7 @@ public class ZhihuPreference implements IHook {
                 }
             }
         });
-        XposedBridge.hookMethod(Helper.getMethodByParameterTypes(BasePreferenceFragment, Bundle.class, String.class), new XC_MethodHook() {
+        XposedBridge.hookMethod(onCreatePreferences, new XC_MethodHook() {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 if (param.thisObject.getClass() == DebugFragment) {
@@ -431,18 +353,15 @@ public class ZhihuPreference implements IHook {
                 Object switch_tag = findPreference.invoke(thisObject, "switch_tag");
                 Object switch_thirdpartylogin = findPreference.invoke(thisObject, "switch_thirdpartylogin");
                 Object switch_autorefresh = findPreference.invoke(thisObject, "switch_autorefresh");
-                Object switch_livebutton = findPreference.invoke(thisObject, "switch_livebutton");
                 Object switch_reddot = findPreference.invoke(thisObject, "switch_reddot");
                 Object switch_vipbanner = findPreference.invoke(thisObject, "switch_vipbanner");
-                Object switch_vipnav = findPreference.invoke(thisObject, "switch_vipnav");
-                Object switch_videonav = findPreference.invoke(thisObject, "switch_videonav");
-                Object switch_friendnav = findPreference.invoke(thisObject, "switch_friendnav");
+                Object switch_homenav = findPreference.invoke(thisObject, "switch_homenav");
+                Object switch_messagenav = findPreference.invoke(thisObject, "switch_messagenav");
+                Object switch_profilenav = findPreference.invoke(thisObject, "switch_profilenav");
                 Object switch_panelnav = findPreference.invoke(thisObject, "switch_panelnav");
                 Object switch_findnav = findPreference.invoke(thisObject, "switch_findnav");
                 Object switch_article = findPreference.invoke(thisObject, "switch_article");
                 Object switch_navres = findPreference.invoke(thisObject, "switch_navres");
-                Object switch_nipple = findPreference.invoke(thisObject, "switch_nipple");
-                Object switch_horizontal = findPreference.invoke(thisObject, "switch_horizontal");
                 Object switch_nextanswer = findPreference.invoke(thisObject, "switch_nextanswer");
                 Object preference_clean = findPreference.invoke(thisObject, "preference_clean");
                 Object switch_autoclean = findPreference.invoke(thisObject, "switch_autoclean");
@@ -455,19 +374,17 @@ public class ZhihuPreference implements IHook {
                 setOnPreferenceClickListener.invoke(switch_tag, thisObject);
                 setOnPreferenceClickListener.invoke(switch_thirdpartylogin, thisObject);
                 setOnPreferenceClickListener.invoke(switch_autorefresh, thisObject);
-                setOnPreferenceClickListener.invoke(switch_livebutton, thisObject);
                 setOnPreferenceClickListener.invoke(switch_reddot, thisObject);
                 setOnPreferenceClickListener.invoke(switch_vipbanner, thisObject);
-                setOnPreferenceClickListener.invoke(switch_vipnav, thisObject);
-                setOnPreferenceClickListener.invoke(switch_videonav, thisObject);
-                setOnPreferenceClickListener.invoke(switch_friendnav, thisObject);
+                setOnPreferenceClickListener.invoke(switch_homenav, thisObject);
+                setOnPreferenceClickListener.invoke(switch_messagenav, thisObject);
+                setOnPreferenceClickListener.invoke(switch_profilenav, thisObject);
                 setOnPreferenceClickListener.invoke(switch_panelnav, thisObject);
                 setOnPreferenceClickListener.invoke(switch_findnav, thisObject);
                 setOnPreferenceClickListener.invoke(switch_article, thisObject);
                 setOnPreferenceClickListener.invoke(switch_navres, thisObject);
-                setOnPreferenceClickListener.invoke(switch_nipple, thisObject);
-                setOnPreferenceClickListener.invoke(switch_horizontal, thisObject);
                 setOnPreferenceClickListener.invoke(switch_nextanswer, thisObject);
+                setOnPreferenceClickListener.invoke(findPreference.invoke(thisObject, "switch_imagesource"), thisObject);
                 setOnPreferenceClickListener.invoke(preference_clean, thisObject);
                 setOnPreferenceClickListener.invoke(switch_autoclean, thisObject);
                 setOnPreferenceClickListener.invoke(preference_version, thisObject);
@@ -498,7 +415,7 @@ public class ZhihuPreference implements IHook {
                         Object category_misc = findPreference.invoke(thisObject, "category_misc");
                         Object category_ui = findPreference.invoke(thisObject, "category_ui");
                         Object category_nav = findPreference.invoke(thisObject, "category_nav");
-                        Object category_swap_answers = findPreference.invoke(thisObject, "category_swap_answers");
+                        Object category_answer = findPreference.invoke(thisObject, "category_answer");
                         Object category_filter = findPreference.invoke(thisObject, "category_filter");
                         Object category_webview = findPreference.invoke(thisObject, "category_webview");
                         Object category_cleaner = findPreference.invoke(thisObject, "category_cleaner");
@@ -508,7 +425,7 @@ public class ZhihuPreference implements IHook {
                         setVisible.invoke(category_misc, false);
                         setVisible.invoke(category_ui, false);
                         setVisible.invoke(category_nav, false);
-                        setVisible.invoke(category_swap_answers, false);
+                        setVisible.invoke(category_answer, false);
                         setVisible.invoke(category_filter, false);
                         setVisible.invoke(category_webview, false);
                         setVisible.invoke(category_cleaner, false);
@@ -544,32 +461,30 @@ public class ZhihuPreference implements IHook {
                 setIcon.invoke(findPreference.invoke(thisObject, "switch_fullscreen"), Helper.modRes.getDrawable(R.drawable.ic_fullscreen_exit));
                 setIcon.invoke(switch_thirdpartylogin, Helper.modRes.getDrawable(R.drawable.ic_login));
                 setIcon.invoke(switch_autorefresh, Helper.modRes.getDrawable(R.drawable.ic_refresh));
-                setIcon.invoke(switch_livebutton, Helper.modRes.getDrawable(R.drawable.ic_live_tv));
                 setIcon.invoke(switch_reddot, Helper.modRes.getDrawable(R.drawable.ic_mark_chat_unread));
                 setIcon.invoke(switch_vipbanner, Helper.modRes.getDrawable(R.drawable.ic_vip_banner));
-                setIcon.invoke(switch_vipnav, Helper.modRes.getDrawable(R.drawable.ic_vip_nav));
-                setIcon.invoke(switch_videonav, Helper.modRes.getDrawable(R.drawable.ic_play_circle));
-                setIcon.invoke(switch_friendnav, Helper.modRes.getDrawable(R.drawable.ic_person_add_alt));
+                setIcon.invoke(switch_homenav, Helper.modRes.getDrawable(R.drawable.ic_rss_feed));
+                setIcon.invoke(switch_messagenav, Helper.modRes.getDrawable(R.drawable.ic_notifications_off));
+                setIcon.invoke(switch_profilenav, Helper.modRes.getDrawable(R.drawable.ic_person));
                 setIcon.invoke(switch_panelnav, Helper.modRes.getDrawable(R.drawable.ic_add_circle));
                 setIcon.invoke(switch_findnav, Helper.modRes.getDrawable(R.drawable.ic_cross_star));
                 setIcon.invoke(findPreference.invoke(thisObject, "switch_hotbanner"), Helper.modRes.getDrawable(R.drawable.ic_whatshot));
                 setIcon.invoke(switch_article, Helper.modRes.getDrawable(R.drawable.ic_article));
                 setIcon.invoke(switch_navres, Helper.modRes.getDrawable(R.drawable.ic_event));
-                setIcon.invoke(switch_nipple, Helper.modRes.getDrawable(R.drawable.ic_do_disturb_on));
-                setIcon.invoke(switch_horizontal, Helper.modRes.getDrawable(R.drawable.ic_swap_horiz));
-                setIcon.invoke(findPreference.invoke(thisObject, "seekbar_sensitivity"), Helper.modRes.getDrawable(R.drawable.ic_bolt));
                 setIcon.invoke(switch_nextanswer, Helper.modRes.getDrawable(R.drawable.ic_circle_down));
                 setIcon.invoke(findPreference.invoke(thisObject, "edit_title"), Helper.regex_title != null ? Helper.modRes.getDrawable(R.drawable.ic_check) : Helper.modRes.getDrawable(R.drawable.ic_close));
                 setIcon.invoke(findPreference.invoke(thisObject, "edit_author"), Helper.regex_author != null ? Helper.modRes.getDrawable(R.drawable.ic_check) : Helper.modRes.getDrawable(R.drawable.ic_close));
                 setIcon.invoke(findPreference.invoke(thisObject, "edit_content"), Helper.regex_content != null ? Helper.modRes.getDrawable(R.drawable.ic_check) : Helper.modRes.getDrawable(R.drawable.ic_close));
                 setIcon.invoke(findPreference.invoke(thisObject, "switch_webview_debug"), Helper.modRes.getDrawable(R.drawable.ic_code));
                 setIcon.invoke(findPreference.invoke(thisObject, "switch_watermark"), Helper.modRes.getDrawable(R.drawable.ic_layers));
+                setIcon.invoke(findPreference.invoke(thisObject, "switch_imagesource"), Helper.modRes.getDrawable(R.drawable.ic_image));
                 setIcon.invoke(findPreference.invoke(thisObject, "switch_subscribe"), Helper.modRes.getDrawable(R.drawable.ic_person_add_alt));
                 setIcon.invoke(findPreference.invoke(thisObject, "edit_js"), Helper.modRes.getDrawable(R.drawable.ic_javascript));
                 setIcon.invoke(preference_clean, Helper.modRes.getDrawable(R.drawable.ic_delete));
                 setIcon.invoke(switch_autoclean, Helper.modRes.getDrawable(R.drawable.ic_auto_delete));
                 setIcon.invoke(findPreference.invoke(thisObject, "switch_silenceclean"), Helper.modRes.getDrawable(R.drawable.ic_notifications_off));
                 setIcon.invoke(findPreference.invoke(thisObject, "switch_hidetoast"), Helper.modRes.getDrawable(R.drawable.ic_tooltip));
+                setIcon.invoke(findPreference.invoke(thisObject, "switch_hooktrace"), Helper.modRes.getDrawable(R.drawable.ic_scroll_text));
                 setIcon.invoke(preference_version, Helper.modRes.getDrawable(R.drawable.ic_info));
                 setIcon.invoke(preference_author, Helper.modRes.getDrawable(R.drawable.ic_person));
                 setIcon.invoke(preference_help, Helper.modRes.getDrawable(R.drawable.ic_help));
@@ -660,28 +575,26 @@ public class ZhihuPreference implements IHook {
                     case "switch_tag":
                     case "switch_thirdpartylogin":
                     case "switch_autorefresh":
-                    case "switch_livebutton":
                     case "switch_reddot":
                     case "switch_vipbanner":
-                    case "switch_vipnav":
-                    case "switch_videonav":
-                    case "switch_friendnav":
+                    case "switch_homenav":
+                    case "switch_messagenav":
+                    case "switch_profilenav":
                     case "switch_panelnav":
                     case "switch_findnav":
                     case "switch_article":
-                    case "switch_horizontal":
                     case "switch_nextanswer":
-                    case "switch_nipple":
                     case "switch_autoclean":
                     case "switch_feedtophot":
                     case "switch_minehybrid":
+                    case "switch_imagesource":
                         Helper.toast("重启知乎生效", Toast.LENGTH_SHORT);
                         break;
                 }
                 return false;
             }
         });
-        XposedBridge.hookMethod(Helper.getMethodByParameterTypes(DebugFragment, Preference, Object.class), new XC_MethodReplacement() {
+        XposedBridge.hookMethod(onPreferenceChange, new XC_MethodReplacement() {
             @Override
             protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
                 if ((boolean) param.args[1]) {
@@ -693,7 +606,7 @@ public class ZhihuPreference implements IHook {
                 return true;
             }
         });
-        XposedBridge.hookMethod(Helper.getMethodByParameterTypes(EditTextPreference, String.class), new XC_MethodHook() {
+        XposedBridge.hookMethod(EditTextPreference_setText, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 Object thisObject = param.thisObject;
@@ -711,29 +624,6 @@ public class ZhihuPreference implements IHook {
                         setIcon.invoke(thisObject, Helper.regex_content != null ? Helper.modRes.getDrawable(R.drawable.ic_check) : Helper.modRes.getDrawable(R.drawable.ic_close));
                         break;
                 }
-            }
-        });
-        XposedHelpers.findAndHookConstructor(SeekBarPreference, Context.class, AttributeSet.class, int.class, int.class, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                SeekBarPreference_mMin.setInt(param.thisObject, 1);
-            }
-        });
-        XposedBridge.hookMethod(Helper.getMethodByParameterTypes(SeekBarPreference, int.class, boolean.class), new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                Object thisObject = param.thisObject;
-                if ("seekbar_sensitivity".equals(getKey.invoke(thisObject))) {
-                    Helper.sensitivity = 10 - (int) param.args[0];
-                }
-            }
-        });
-        XposedHelpers.findAndHookMethod(OnSeekBarChangeListener, "onProgressChanged", SeekBar.class, int.class, boolean.class, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                Object thisObject = OnSeekBarChangeListener_seekBarPreferenceInstance.get(param.thisObject);
-                TextView textView = (TextView) SeekBarPreference_mSeekBarValueTextView.get(thisObject);
-                textView.setText(String.valueOf(SeekBarPreference_mMin.getInt(thisObject) + (int) param.args[1]));
             }
         });
 

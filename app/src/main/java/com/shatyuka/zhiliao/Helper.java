@@ -3,16 +3,16 @@ package com.shatyuka.zhiliao;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.content.SharedPreferences;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
-
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -22,8 +22,6 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
-
-import de.robv.android.xposed.XposedBridge;
 
 public class Helper {
     public static Class<?> MorphAdHelper;
@@ -38,7 +36,6 @@ public class Helper {
     public static Pattern regex_content;
 
     public static float scale;
-    public static int sensitivity;
 
     @SuppressLint("StaticFieldLeak")
     public static Context context;
@@ -69,7 +66,6 @@ public class Helper {
             regex_content = compileRegex(prefs.getString("edit_content", ""));
 
             scale = context.getResources().getDisplayMetrics().density;
-            sensitivity = 10 - prefs.getInt("seekbar_sensitivity", 5);
 
             return true;
         } catch (Exception e) {
@@ -91,7 +87,7 @@ public class Helper {
                 IZhihuWebView = null;
             }
         }
-        WebViewClientWrapper = findClass(classLoader, "com.zhihu.android.app.mercury.web.", 0, 2,
+        WebViewClientWrapper = findClass(classLoader, "com.zhihu.android.app.mercury.web.", 0, 3,
                 (Class<?> clazz) -> clazz.getSuperclass() == WebViewClient.class);
         try {
             Class<?> dataUnique = classLoader.loadClass("com.zhihu.android.api.model.template.DataUnique");

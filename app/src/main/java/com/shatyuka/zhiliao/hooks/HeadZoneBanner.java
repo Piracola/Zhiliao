@@ -1,16 +1,17 @@
 package com.shatyuka.zhiliao.hooks;
 
 import com.shatyuka.zhiliao.Helper;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Field;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
+import java.util.Collections;
 
 public class HeadZoneBanner implements IHook {
     static Class<?> feedsHotListFragment2;
+    static Class<?> rankFeedList;
 
     static Field head_zone;
+    static Field headZones;
 
     @Override
     public String getName() {
@@ -19,26 +20,34 @@ public class HeadZoneBanner implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
+        rankFeedList = classLoader.loadClass("com.zhihu.android.api.model.RankFeedList");
+        head_zone = rankFeedList.getDeclaredField("head_zone");
+        head_zone.setAccessible(true);
+        feedsHotListFragment2 = classLoader.loadClass("com.zhihu.android.app.feed.ui.fragment.FeedsHotListFragment2");
+
+        // Gj(RankFeedList) 优先消费新字段 headZones，取不到时只降级清空 head_zone
         try {
-            Class<?> rankFeedList = classLoader.loadClass("com.zhihu.android.api.model.RankFeedList");
-            head_zone = rankFeedList.getDeclaredField("head_zone");
-            head_zone.setAccessible(true);
-            feedsHotListFragment2 = classLoader.loadClass("com.zhihu.android.app.feed.ui.fragment.FeedsHotListFragment2");
-        } catch (ClassNotFoundException | NoSuchFieldException ignore) {
+            headZones = rankFeedList.getDeclaredField("headZones");
+            headZones.setAccessible(true);
+        } catch (NoSuchFieldException e) {
+            headZones = null;
+            XposedBridge.log("[Zhiliao] RankFeedList.headZones 不存在: " + e);
         }
     }
 
     @Override
     public void hook() throws Throwable {
-        if (feedsHotListFragment2 != null && head_zone != null) {
-            XposedBridge.hookAllMethods(feedsHotListFragment2, "postRefreshSucceed", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws IllegalAccessException {
-                    if (Helper.prefs.getBoolean("switch_mainswitch", false)) {
-                        head_zone.set(param.args[0], null);
-                    }
+        XposedBridge.hookAllMethods(feedsHotListFragment2, "postRefreshSucceed", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws IllegalAccessException {
+                if (!Helper.prefs.getBoolean("switch_mainswitch", false) || param.args.length == 0 || !rankFeedList.isInstance(param.args[0])) {
+                    return;
                 }
-            });
-        }
+                head_zone.set(param.args[0], null);
+                if (headZones != null) {
+                    headZones.set(param.args[0], Collections.emptyList());
+                }
+            }
+        });
     }
 }

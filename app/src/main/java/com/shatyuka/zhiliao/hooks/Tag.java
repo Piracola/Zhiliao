@@ -4,20 +4,18 @@ import android.annotation.SuppressLint;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-
 import com.shatyuka.zhiliao.Helper;
 import com.shatyuka.zhiliao.R;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 
 public class Tag implements IHook {
     static Drawable[] backgrounds;
@@ -27,6 +25,7 @@ public class Tag implements IHook {
     static Class<?> ViewHolder;
     static Class<?> SugarHolder;
     static Class<?> TemplateRoot;
+    static Class<?> Element;
     static Class<?> Line;
     static Class<?> Avatar;
 
@@ -96,7 +95,7 @@ public class Tag implements IHook {
             Card_Extra_contentType = Card_extra.getType().getDeclaredField("contentType");
             Card_Extra_contentType.setAccessible(true);
 
-            Class<?> Element = classLoader.loadClass("com.zhihu.android.ui.shared.sdui.model.Element");
+            Element = classLoader.loadClass("com.zhihu.android.ui.shared.sdui.model.Element");
             Element_id = Element.getDeclaredField("id");
             Element_id.setAccessible(true);
             Line = classLoader.loadClass("com.zhihu.android.ui.shared.sdui.model.Line");
@@ -115,10 +114,11 @@ public class Tag implements IHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     Object thisObject = param.thisObject;
-                    ViewGroup viewGroup = (ViewGroup) ViewHolder_itemView.get(thisObject);
-                    if (viewGroup == null) {
+                    Object itemView = ViewHolder_itemView.get(thisObject);
+                    if (!(itemView instanceof ViewGroup)) {
                         return;
                     }
+                    ViewGroup viewGroup = (ViewGroup) itemView;
 
                     TextView title = viewGroup.findViewById(Helper.context.getResources().getIdentifier("title", "id", Helper.hookPackage));
                     View author = viewGroup.findViewById(Helper.context.getResources().getIdentifier("author", "id", Helper.hookPackage));
@@ -127,7 +127,13 @@ public class Tag implements IHook {
                     }
 
                     Object templateFeed = SugarHolder_mData.get(thisObject);
+                    if (!TemplateRoot.isInstance(templateFeed)) {
+                        return;
+                    }
                     Object unique = TemplateRoot_unique.get(templateFeed);
+                    if (!Helper.DataUnique_type.getDeclaringClass().isInstance(unique)) {
+                        return;
+                    }
                     String type = (String) Helper.DataUnique_type.get(unique);
 
                     postProcessTag(title, author, viewGroup, type, false);
@@ -139,25 +145,41 @@ public class Tag implements IHook {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                         Object thisObject = param.thisObject;
-                        Object card = param.args[0];
-                        Object extra = Card_extra.get(card);
-                        String type = (String) Card_Extra_contentType.get(extra);
-
-                        View view = (View) SDUICard_view.get(thisObject);
-                        if (!(view instanceof FrameLayout)) {
+                        if (param.args.length == 0 || !Card_extra.getDeclaringClass().isInstance(param.args[0])) {
                             return;
                         }
-                        FrameLayout layout = (FrameLayout) view;
+                        Object card = param.args[0];
+                        Object extra = Card_extra.get(card);
+                        if (extra == null) {
+                            return;
+                        }
+                        String type = (String) Card_Extra_contentType.get(extra);
+
+                        Object viewObject = SDUICard_view.get(thisObject);
+                        if (!(viewObject instanceof FrameLayout)) {
+                            return;
+                        }
+                        FrameLayout layout = (FrameLayout) viewObject;
                         if (layout.getChildCount() != 1) {
                             return;
                         }
-                        ViewGroup cardView = (ViewGroup) layout.getChildAt(0);
+                        View layoutChild = layout.getChildAt(0);
+                        if (!(layoutChild instanceof ViewGroup)) {
+                            return;
+                        }
+                        ViewGroup cardView = (ViewGroup) layoutChild;
 
                         List<?> elements = (List<?>) Card_elements.get(card);
+                        if (elements == null) {
+                            return;
+                        }
                         boolean hasReason = false;
                         TextView title = null;
                         View author = null;
                         for (Object element : elements) {
+                            if (!Element.isInstance(element)) {
+                                continue;
+                            }
                             String id = (String) Element_id.get(element);
                             if (id == null) {
                                 continue;
@@ -167,19 +189,25 @@ public class Tag implements IHook {
                                 if (index != 0) {
                                     hasReason = true;
                                 }
-                                title = (TextView) cardView.getChildAt(index);
+                                View child = cardView.getChildAt(index);
+                                if (child instanceof TextView) {
+                                    title = (TextView) child;
+                                }
                                 continue;
                             }
                             if (author == null && element.getClass() == Line && id.equals("0")) {
                                 List<?> lineElements = (List<?>) Line_elements.get(element);
-                                if (!lineElements.isEmpty()) {
+                                if (lineElements != null && !lineElements.isEmpty()) {
                                     Object lineElement = lineElements.get(0);
-                                    if (lineElement.getClass() == Avatar) {
+                                    if (lineElement != null && lineElement.getClass() == Avatar) {
                                         int index = elements.indexOf(element);
                                         if (title == null && index != 0) {
                                             hasReason = true;
                                         }
-                                        author = cardView.getChildAt(index);
+                                        View child = cardView.getChildAt(index);
+                                        if (child instanceof ViewGroup) {
+                                            author = child;
+                                        }
                                         break;
                                     }
                                 }
@@ -210,7 +238,11 @@ public class Tag implements IHook {
             tagLayout.addView(tag);
             viewGroup.addView(tagLayout);
         } else {
-            tagLayout = (RelativeLayout) tag.getParent();
+            ViewParent tagParent = tag.getParent();
+            if (!(tagParent instanceof RelativeLayout)) {
+                return;
+            }
+            tagLayout = (RelativeLayout) tagParent;
         }
 
         // 设置tag属性
@@ -220,9 +252,9 @@ public class Tag implements IHook {
 
         // 调整X坐标
         int baseX = 0;
-        if (title != null) {
+        if (title != null && title.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             baseX = ((ViewGroup.MarginLayoutParams) title.getLayoutParams()).leftMargin;
-            if (baseX != 0) {
+            if (baseX != 0 && author.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
                 ((ViewGroup.MarginLayoutParams) author.getLayoutParams()).leftMargin = baseX;
             }
         }
@@ -246,12 +278,15 @@ public class Tag implements IHook {
         // 为tag留出空间
         if (hasTitle) {
             title.setText("　　 " + title.getText());
-        } else {
+        } else if (author.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             ((ViewGroup.MarginLayoutParams) author.getLayoutParams()).leftMargin = (int) (Helper.scale * 40 + 0.5 + baseX);
         }
     }
 
     static String getType(String type) {
+        if (type == null) {
+            return "其他";
+        }
         switch (type) {
             case "answer":
             case "Answer":
@@ -279,6 +314,9 @@ public class Tag implements IHook {
             backgrounds[2] = Helper.modRes.getDrawable(R.drawable.bg_video);
             backgrounds[3] = Helper.modRes.getDrawable(R.drawable.bg_pin);
             backgrounds[4] = Helper.modRes.getDrawable(R.drawable.bg_others);
+        }
+        if (type == null) {
+            return backgrounds[4];
         }
         switch (type) {
             case "answer":

@@ -2,16 +2,15 @@ package com.shatyuka.zhiliao.hooks;
 
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
-
 import com.shatyuka.zhiliao.Helper;
-
+import com.shatyuka.zhiliao.TargetResolver;
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.List;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 
 public class AnswerAd implements IHook {
     static Method shouldInterceptRequest;
@@ -27,13 +26,16 @@ public class AnswerAd implements IHook {
         Class<?> AppView = classLoader.loadClass("com.zhihu.android.answer.module.content.appview.AnswerAppView").getSuperclass();
         if (AppView == null)
             throw new ClassNotFoundException("com.zhihu.android.appview.AppView");
-        Helper.findClass(classLoader, AppView.getName() + "$",
+        Helper.findClass(classLoader, AppView.getName() + "$", 0, 32,
                 (Class<?> ZhihuWebViewClient) -> {
-                    shouldInterceptRequest = Helper.getMethodByParameterTypes(ZhihuWebViewClient, Helper.IZhihuWebView, WebResourceRequest.class);
+                    shouldInterceptRequest = TargetResolver.findMethod(ZhihuWebViewClient, false, 0,
+                            method -> method.getReturnType() == WebResourceResponse.class
+                                    && Arrays.equals(method.getParameterTypes(),
+                                    new Class<?>[]{Helper.IZhihuWebView, WebResourceRequest.class}));
                     return shouldInterceptRequest != null;
                 });
         if (shouldInterceptRequest == null)
-            throw new NoSuchMethodException("com.zhihu.android.appview.AppView$ZhihuWebViewClient.shouldInterceptRequest(IZhihuWebView, WebResourceRequest)");
+            throw new NoSuchMethodException("com.zhihu.android.appview.AppView$ZhihuWebViewClient(IZhihuWebView, WebResourceRequest): WebResourceResponse");
     }
 
     @Override
@@ -44,6 +46,8 @@ public class AnswerAd implements IHook {
                 if (!Helper.prefs.getBoolean("switch_mainswitch", false))
                     return;
                 WebResourceRequest request = (WebResourceRequest) param.args[1];
+                if (request == null || request.getUrl() == null)
+                    return;
                 List<String> segments = request.getUrl().getPathSegments();
                 if (segments.size() > 2 && request.getMethod().equals("GET")
                         && ((Helper.prefs.getBoolean("switch_answerad", true) && (segments.get(segments.size() - 1).equals("recommendations")
@@ -66,10 +70,14 @@ public class AnswerAd implements IHook {
                 if (!Helper.prefs.getBoolean("switch_mainswitch", false))
                     return;
                 WebResourceRequest request = (WebResourceRequest) param.args[1];
+                if (request == null || request.getUrl() == null)
+                    return;
                 List<String> segments = request.getUrl().getPathSegments();
                 if (segments.size() > 2 && request.getMethod().equals("GET")) {
                     if (Helper.prefs.getBoolean("switch_searchwords", false) && segments.get(0).equals("appview") && segments.get(segments.size() - 2).equals("answer")) {
                         WebResourceResponse response = (WebResourceResponse) param.getResult();
+                        if (response == null || response.getData() == null)
+                            return;
                         try {
                             int available = response.getData().available();
                             if (available == 0) {

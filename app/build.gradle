@@ -2,14 +2,15 @@ apply plugin: 'com.android.application'
 
 android {
     namespace = 'com.shatyuka.zhiliao'
-    compileSdkVersion 36
+    compileSdk 36
     defaultConfig {
         applicationId "com.shatyuka.zhiliao"
-        minSdkVersion 26
-        targetSdkVersion 36
-        ndkVersion = "28.2.13676358"
+        minSdk 26
+        targetSdk 36
+        ndkVersion = "30.0.16248370"
         versionCode appVerCode.toInteger()
         versionName appVerName
+        resValue "string", "app_version", appVerName
         externalNativeBuild {
             cmake {
                 abiFilters "arm64-v8a", "armeabi-v7a"
@@ -26,14 +27,6 @@ android {
                 storePassword = project.properties['releaseStorePassword']
                 keyAlias = project.properties['releaseKeyAlias']
                 keyPassword = project.properties['releaseKeyPassword']
-            }
-        }
-    }
-    applicationVariants.configureEach { variant ->
-        variant.resValue "string", "app_version", variant.versionName
-        variant.outputs.configureEach { output ->
-            if (variant.buildType.name == 'release') {
-                outputFileName = "Zhiliao_${defaultConfig.versionName}.apk"
             }
         }
     }
@@ -74,14 +67,16 @@ android {
     }
     buildFeatures {
         prefab = true
+        resValues = true
     }
-    packagingOptions {
+    packaging {
         jniLibs {
             excludes += ['META-INF/**', 'kotlin/**', 'google/**']
             useLegacyPackaging = false
         }
         resources {
-            excludes += ['META-INF/**', 'kotlin/**', 'google/**', '**.bin']
+            // META-INF/xposed/** declares the module to the framework, only strip dependency metadata
+            excludes += ['META-INF/*.version', 'META-INF/*.kotlin_module', 'META-INF/LICENSE*', 'META-INF/NOTICE*', 'kotlin/**', 'google/**', '**.bin']
         }
     }
     tasks.withType(JavaCompile).tap {
@@ -91,10 +86,18 @@ android {
     }
 }
 
+androidComponents {
+    onVariants(selector().withBuildType('release')) { variant ->
+        variant.outputs.each { output ->
+            output.outputFileName.set("Zhiliao_${output.versionName.get()}.apk")
+        }
+    }
+}
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'dev.rikka.ndk.thirdparty:cxx:1.2.0'
     testImplementation 'junit:junit:4.13.2'
-    compileOnly 'de.robv.android.xposed:api:82'
-    testImplementation 'de.robv.android.xposed:api:82'
+    compileOnly 'io.github.libxposed:api:102.0.0'
+    testImplementation 'io.github.libxposed:api:102.0.0'
 }

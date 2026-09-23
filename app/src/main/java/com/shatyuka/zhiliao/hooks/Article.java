@@ -1,12 +1,10 @@
 package com.shatyuka.zhiliao.hooks;
 
 import com.shatyuka.zhiliao.Helper;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 
 public class Article implements IHook {
     static Class<?> ContentMixAdapter;
@@ -25,6 +23,7 @@ public class Article implements IHook {
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
         if (Helper.versionCode > 2614) {
+            // 11.10.0 只剩 mix.adapter 包，mix.a.a / mix.b.a 已不存在
             try {
                 ContentMixAdapter = classLoader.loadClass("com.zhihu.android.mix.a.a");
                 getItemCount = ContentMixAdapter.getMethod("getItemCount");
@@ -68,8 +67,18 @@ public class Article implements IHook {
                 XposedBridge.hookMethod(getItemCount, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        if (param.thisObject.getClass() == ContentMixAdapter && ContentMixPagerFragment_type.get(ContentMixAdapter_fragment.get(param.thisObject)) == "article")
+                        Object thisObject = param.thisObject;
+                        if (thisObject == null || thisObject.getClass() != ContentMixAdapter) {
+                            return;
+                        }
+                        Object fragment = ContentMixAdapter_fragment.get(thisObject);
+                        if (fragment == null) {
+                            return;
+                        }
+                        Object type = ContentMixPagerFragment_type.get(fragment);
+                        if ("article".equals(type)) {
                             param.setResult(1);
+                        }
                     }
                 });
             }

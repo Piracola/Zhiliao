@@ -2,11 +2,9 @@ package com.shatyuka.zhiliao.hooks;
 
 import com.shatyuka.zhiliao.Helper;
 import com.shatyuka.zhiliao.TargetResolver;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Method;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 
 public class LaunchAd implements IHook {
     static Class<?> AdNetworkManager;

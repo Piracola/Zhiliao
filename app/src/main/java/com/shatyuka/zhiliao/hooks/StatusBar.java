@@ -4,15 +4,12 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 import android.os.Bundle;
 import android.view.View;
-
 import com.shatyuka.zhiliao.Helper;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
+import com.shatyuka.zhiliao.xposed.XposedHelpers;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
 
 public class StatusBar implements IHook {
     static Class<?> CombinedDrawable;
@@ -38,6 +35,9 @@ public class StatusBar implements IHook {
                     Class<?> statusBarDrawable = classLoader.loadClass(className + "$b");
                     if (!LayerDrawable.class.isAssignableFrom(combinedDrawable) || !Drawable.class.isAssignableFrom(statusBarDrawable))
                         return false;
+                    // n0$a 里 k(=n0$b) 才是 StatusBarDrawable，j 是 origin Drawable，按字段名取会绑错接收者
+                    if (Helper.findFieldByType(combinedDrawable, statusBarDrawable) == null)
+                        return false;
                     CombinedDrawable = combinedDrawable;
                     StatusBarDrawable = statusBarDrawable;
                     return true;
@@ -49,13 +49,9 @@ public class StatusBar implements IHook {
 
         setColor = StatusBarDrawable.getMethod("a", int.class);
 
-        try {
-            CombinedDrawable_statusBarDrawable = CombinedDrawable.getDeclaredField("b");
-            CombinedDrawable_statusBarDrawable.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            CombinedDrawable_statusBarDrawable = CombinedDrawable.getDeclaredField("j");
-            CombinedDrawable_statusBarDrawable.setAccessible(true);
-        }
+        CombinedDrawable_statusBarDrawable = Helper.findFieldByType(CombinedDrawable, StatusBarDrawable);
+        if (CombinedDrawable_statusBarDrawable == null)
+            throw new NoSuchFieldException(CombinedDrawable.getName() + ".statusBarDrawable");
     }
 
     @Override
@@ -78,7 +74,8 @@ public class StatusBar implements IHook {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
                 if (Helper.prefs.getBoolean("switch_mainswitch", false) && Helper.prefs.getBoolean("switch_statusbar", false))
-                    ((View) param.args[0]).setBackgroundColor(getStatusbarColor());
+                    if (param.args[0] instanceof View)
+                        ((View) param.args[0]).setBackgroundColor(getStatusbarColor());
             }
         });
 
@@ -90,7 +87,8 @@ public class StatusBar implements IHook {
                         Object background = ((View) Helper.settingsView).getBackground();
                         if (CombinedDrawable.isInstance(background)) {
                             Object statusBarDrawable = CombinedDrawable_statusBarDrawable.get(background);
-                            setColor.invoke(statusBarDrawable, 0);
+                            if (StatusBarDrawable.isInstance(statusBarDrawable))
+                                setColor.invoke(statusBarDrawable, 0);
                         }
                     }
                 }

@@ -20,7 +20,14 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
--keep public class com.shatyuka.zhiliao.MainHook
+# The framework reads the entry class from this file, keep it in sync with the obfuscated name
+-adaptresourcefilecontents META-INF/xposed/java_init.list
+
+-keep class com.shatyuka.zhiliao.MainHook { *; }
+-keep,allowobfuscation,allowoptimization class ** implements io.github.libxposed.api.XposedInterface$Hooker
+-keepclassmembers,allowoptimization class ** implements io.github.libxposed.api.XposedInterface$Hooker {
+    public java.lang.Object intercept(io.github.libxposed.api.XposedInterface$Chain);
+}
 -repackageclasses "zhiliao"
 -allowaccessmodification
 -overloadaggressively

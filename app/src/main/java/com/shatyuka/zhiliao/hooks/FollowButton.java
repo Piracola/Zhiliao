@@ -3,15 +3,12 @@ package com.shatyuka.zhiliao.hooks;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-
 import com.shatyuka.zhiliao.Helper;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Optional;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
 
 /**
  * 卡片视图去除关注按钮

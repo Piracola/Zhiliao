@@ -5,17 +5,13 @@ import android.content.Intent;
 import android.net.Uri;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
-
 import com.shatyuka.zhiliao.Helper;
-
-import org.json.JSONObject;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
+import org.json.JSONObject;
 
 public class ExternLink implements IHook {
     static Class<?> H5Event;

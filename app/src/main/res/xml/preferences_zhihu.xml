@@ -166,12 +166,6 @@
         <com.zhihu.android.app.ui.widget.SwitchPreference
             android:defaultValue="false"
             android:dependency="switch_mainswitch"
-            android:key="switch_livebutton"
-            android:title="移除直播按钮"
-            android:summary="移除首页左上角直播按钮"/>
-        <com.zhihu.android.app.ui.widget.SwitchPreference
-            android:defaultValue="false"
-            android:dependency="switch_mainswitch"
             android:key="switch_reddot"
             android:title="不显示小红点"
             android:summary="强迫症福音"/>
@@ -210,60 +204,41 @@
         <com.zhihu.android.app.ui.widget.SwitchPreference
             android:defaultValue="false"
             android:dependency="switch_mainswitch"
-            android:key="switch_vipnav"
-            android:title="隐藏会员按钮"
-            android:summary="隐藏导航栏会员按钮"/>
-        <com.zhihu.android.app.ui.widget.SwitchPreference
-            android:defaultValue="false"
-            android:dependency="switch_mainswitch"
-            android:key="switch_videonav"
-            android:title="隐藏视频按钮"
-            android:summary="隐藏导航栏视频按钮"/>
-        <com.zhihu.android.app.ui.widget.SwitchPreference
-            android:defaultValue="false"
-            android:dependency="switch_mainswitch"
-            android:key="switch_friendnav"
-            android:title="隐藏关注按钮"
-            android:summary="隐藏导航栏关注按钮"/>
-        <com.zhihu.android.app.ui.widget.SwitchPreference
-            android:defaultValue="false"
-            android:dependency="switch_mainswitch"
-            android:key="switch_panelnav"
-            android:title="隐藏发布按钮"
-            android:summary="隐藏导航栏发布按钮"/>
+            android:key="switch_homenav"
+            android:title="隐藏首页"
+            android:summary="隐藏导航栏首页按钮"/>
         <com.zhihu.android.app.ui.widget.SwitchPreference
             android:defaultValue="false"
             android:dependency="switch_mainswitch"
             android:key="switch_findnav"
-            android:title="隐藏发现按钮"
-            android:summary="隐藏导航栏发现按钮"/>
+            android:title="隐藏看山"
+            android:summary="隐藏导航栏看山按钮"/>
+        <com.zhihu.android.app.ui.widget.SwitchPreference
+            android:defaultValue="false"
+            android:dependency="switch_mainswitch"
+            android:key="switch_panelnav"
+            android:title="隐藏发布"
+            android:summary="隐藏导航栏发布按钮"/>
+        <com.zhihu.android.app.ui.widget.SwitchPreference
+            android:defaultValue="false"
+            android:dependency="switch_mainswitch"
+            android:key="switch_messagenav"
+            android:title="隐藏消息"
+            android:summary="隐藏导航栏消息按钮"/>
+        <com.zhihu.android.app.ui.widget.SwitchPreference
+            android:defaultValue="false"
+            android:dependency="switch_mainswitch"
+            android:key="switch_profilenav"
+            android:title="隐藏我的"
+            android:summary="隐藏导航栏我的按钮"/>
         <com.zhihu.android.app.ui.widget.SwitchPreference
             android:defaultValue="false"
             android:dependency="switch_mainswitch"
             android:key="switch_navres"
             android:title="禁用活动主题"
             android:summary="禁止导航栏使用活动主题"/>
-        <com.zhihu.android.app.ui.widget.SwitchPreference
-            android:defaultValue="false"
-            android:dependency="switch_mainswitch"
-            android:key="switch_nipple"
-            android:title="隐藏导航栏突起"
-            android:summary="隐藏奇奇怪怪的突出部"/>
     </PreferenceCategory>
-    <PreferenceCategory android:title="左右划" android:key="category_swap_answers">
-        <com.zhihu.android.app.ui.widget.SwitchPreference
-            android:defaultValue="false"
-            android:dependency="switch_mainswitch"
-            android:key="switch_horizontal"
-            android:title="左右划切换回答"
-            android:summary="先凑合用吧 ＞﹏＜"/>
-        <SeekBarPreference
-            android:dependency="switch_horizontal"
-            android:key="seekbar_sensitivity"
-            android:title="灵敏度"
-            android:summary="调节左右划灵敏度"
-            android:defaultValue="5"
-            android:max="9"/>
+    <PreferenceCategory android:title="回答" android:key="category_answer">
         <com.zhihu.android.app.ui.widget.SwitchPreference
             android:defaultValue="false"
             android:dependency="switch_mainswitch"
@@ -299,8 +274,14 @@
             android:defaultValue="false"
             android:dependency="switch_mainswitch"
             android:key="switch_watermark"
-            android:title="去除背景盲水印"
-            android:summary="禁止开盒"/>
+            android:title="移除水印"
+            android:summary="页面/视频/容器水印；像素级水印无法移除"/>
+        <com.zhihu.android.app.ui.widget.SwitchPreference
+            android:defaultValue="false"
+            android:dependency="switch_mainswitch"
+            android:key="switch_imagesource"
+            android:title="图片换源去水印"
+            android:summary="实验性：仅对服务端另发原图的图片水印有效"/>
         <com.zhihu.android.app.ui.widget.SwitchPreference
             android:defaultValue="false"
             android:dependency="switch_mainswitch"
@@ -337,6 +318,12 @@
                 android:key="switch_hidetoast"
                 android:title="隐藏功能加载失败提示"
                 android:summary="无视风险，继续运行"/>
+        <com.zhihu.android.app.ui.widget.SwitchPreference
+                android:defaultValue="false"
+                android:dependency="switch_mainswitch"
+                android:key="switch_hooktrace"
+                android:title="记录 Hook 触发日志"
+                android:summary="排障用，每个目标只记一条，重启知乎生效"/>
     </PreferenceCategory>
     <PreferenceCategory android:title="关于">
         <Preference

@@ -1,0 +1,4 @@
+# libxposed module properties
+minApiVersion=102
+targetApiVersion=102
+staticScope=true

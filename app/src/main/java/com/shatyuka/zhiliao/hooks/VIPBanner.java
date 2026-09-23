@@ -5,23 +5,20 @@ import android.content.res.XmlResourceParser;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-
 import com.shatyuka.zhiliao.Helper;
 import com.shatyuka.zhiliao.R;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodReplacement;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Method;
-
-import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
 
 public class VIPBanner implements IHook {
     static Class<?> VipEntranceView;
     static Class<?> MoreVipData;
-    static Class<?> NewMoreFragment;
 
     static Method initView;
     static Method initView_new;
+    static Method setData;
+    static Method onClick;
 
     @Override
     public String getName() {
@@ -30,58 +27,52 @@ public class VIPBanner implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
+        // 11.10.0: 旧类 more.more.widget.VipEntranceView、NewMoreFragment、resetStyle 均已不存在
+        // 回退类 premium.view.VipEntranceView 的入口是 public init(Context)，initView(Context) 只是其私有实现
+        VipEntranceView = classLoader.loadClass("com.zhihu.android.premium.view.VipEntranceView");
+        initView_new = VipEntranceView.getDeclaredMethod("init", Context.class);
         try {
-            VipEntranceView = classLoader.loadClass("com.zhihu.android.app.ui.fragment.more.more.widget.VipEntranceView");
-            initView = VipEntranceView.getDeclaredMethod("a", Context.class);
-        } catch (ClassNotFoundException ignored) {
-            VipEntranceView = classLoader.loadClass("com.zhihu.android.premium.view.VipEntranceView");
-            initView_new = VipEntranceView.getDeclaredMethod("initView", Context.class);
+            initView = VipEntranceView.getDeclaredMethod("initView", Context.class);
+            initView.setAccessible(true);
+        } catch (NoSuchMethodException ignored) {
+            initView = null;
         }
-
+        try {
+            onClick = VipEntranceView.getDeclaredMethod("onClick", View.class);
+        } catch (NoSuchMethodException ignored) {
+            onClick = null;
+        }
         try {
             MoreVipData = classLoader.loadClass("com.zhihu.android.api.MoreVipData");
-            NewMoreFragment = classLoader.loadClass("com.zhihu.android.app.ui.fragment.more.more.NewMoreFragment");
+            setData = Helper.getMethodByParameterTypes(VipEntranceView, MoreVipData, String.class, boolean.class);
         } catch (ClassNotFoundException ignored) {
+            MoreVipData = null;
         }
     }
 
     @Override
     public void hook() throws Throwable {
         if (Helper.prefs.getBoolean("switch_mainswitch", false) && Helper.prefs.getBoolean("switch_vipbanner", false)) {
-            if (initView != null) {
-                XposedBridge.hookMethod(initView, new XC_MethodReplacement() {
-                    @Override
-                    protected Object replaceHookedMethod(MethodHookParam param) {
-                        XmlResourceParser layout_vipentranceview = Helper.modRes.getLayout(R.layout.layout_vipentranceview);
-                        LayoutInflater.from((Context) param.args[0]).inflate(layout_vipentranceview, (ViewGroup) param.thisObject);
-                        return null;
+            XC_MethodReplacement replaceVipEntranceLayout = new XC_MethodReplacement() {
+                @Override
+                protected Object replaceHookedMethod(MethodHookParam param) {
+                    if (param.args[0] instanceof Context && param.thisObject instanceof ViewGroup) {
+                        XmlResourceParser layout_vipentranceview_new = Helper.modRes.getLayout(R.layout.layout_vipentranceview_new);
+                        LayoutInflater.from((Context) param.args[0]).inflate(layout_vipentranceview_new, (ViewGroup) param.thisObject);
                     }
-                });
-            }
-            if (initView_new != null) {
-                XposedBridge.hookMethod(initView_new, new XC_MethodReplacement() {
-                    @Override
-                    protected Object replaceHookedMethod(MethodHookParam param) {
-                        XmlResourceParser layout_vipentranceview = Helper.modRes.getLayout(R.layout.layout_vipentranceview_new);
-                        LayoutInflater.from((Context) param.args[0]).inflate(layout_vipentranceview, (ViewGroup) param.thisObject);
-                        return null;
-                    }
-                });
-            }
-            for (Method method : VipEntranceView.getMethods()) {
-                if (method.getName().equals("setData")) {
-                    XposedBridge.hookMethod(method, XC_MethodReplacement.returnConstant(null));
-                    break;
+                    return null;
                 }
-            }
-            XposedHelpers.findAndHookMethod(VipEntranceView, "onClick", View.class, XC_MethodReplacement.returnConstant(null));
-            XposedBridge.hookAllMethods(VipEntranceView, "resetStyle", XC_MethodReplacement.returnConstant(null));
-
-            if (MoreVipData != null && NewMoreFragment != null) {
-                XposedHelpers.findAndHookMethod(NewMoreFragment, "a", MoreVipData, XC_MethodReplacement.returnConstant(null));
-            }
-
-            XposedBridge.hookAllMethods(MoreVipData, "isLegal", XC_MethodReplacement.returnConstant(Boolean.FALSE));
+            };
+            XposedBridge.hookMethod(initView_new, replaceVipEntranceLayout);
+            if (initView != null)
+                XposedBridge.hookMethod(initView, replaceVipEntranceLayout);
+            if (setData != null)
+                XposedBridge.hookMethod(setData, XC_MethodReplacement.returnConstant(null));
+            if (onClick != null)
+                XposedBridge.hookMethod(onClick, XC_MethodReplacement.returnConstant(null));
+            // 会员卡片已迁到「我的」页，MineTabFragment 仍消费 isLegal
+            if (MoreVipData != null)
+                XposedBridge.hookAllMethods(MoreVipData, "isLegal", XC_MethodReplacement.returnConstant(Boolean.FALSE));
         }
     }
 }

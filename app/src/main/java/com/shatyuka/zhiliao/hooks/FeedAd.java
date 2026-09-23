@@ -1,15 +1,15 @@
 package com.shatyuka.zhiliao.hooks;
 
 import android.content.Context;
-
 import com.shatyuka.zhiliao.Helper;
-
+import com.shatyuka.zhiliao.TargetResolver;
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
+import com.shatyuka.zhiliao.xposed.XposedHelpers;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.List;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
 
 public class FeedAd implements IHook {
     static Class<?> BasePagingFragment;
@@ -19,6 +19,8 @@ public class FeedAd implements IHook {
     static Class<?> Ad;
 
     static Field FeedList_data;
+
+    static Method resolveFeedAdParam;
 
     @Override
     public String getName() {
@@ -42,6 +44,10 @@ public class FeedAd implements IHook {
         }
 
         FeedList_data = classLoader.loadClass("com.zhihu.android.api.model.FeedList").getField("data");
+        resolveFeedAdParam = TargetResolver.findMethod(Helper.MorphAdHelper, false, 0,
+                method -> method.getReturnType() == boolean.class
+                        && Arrays.equals(method.getParameterTypes(),
+                        new Class<?>[]{Context.class, FeedAdvert, boolean.class, Boolean.class}));
     }
 
     @Override
@@ -50,13 +56,16 @@ public class FeedAd implements IHook {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                 if (Helper.prefs.getBoolean("switch_mainswitch", false) && Helper.prefs.getBoolean("switch_feedad", true)) {
-                    if (param.args[0] == null)
+                    if (param.args[0] == null || !FeedList_data.getDeclaringClass().isInstance(param.args[0]))
                         return;
-                    List<?> list = (List<?>) FeedList_data.get(param.args[0]);
-                    if (list == null || list.isEmpty())
+                    Object data = FeedList_data.get(param.args[0]);
+                    if (!(data instanceof List))
+                        return;
+                    List<?> list = (List<?>) data;
+                    if (list.isEmpty())
                         return;
                     for (int i = list.size() - 1; i >= 0; i--) {
-                        if (list.get(i).getClass() == FeedAdvert) {
+                        if (isFeedAdvert(list.get(i))) {
                             list.remove(i);
                         }
                     }
@@ -67,21 +76,21 @@ public class FeedAd implements IHook {
             @Override
             protected void beforeHookedMethod(MethodHookParam param) {
                 if (Helper.prefs.getBoolean("switch_mainswitch", false) && Helper.prefs.getBoolean("switch_feedad", true)) {
-                    if (param.args[1] == null)
+                    if (!(param.args[1] instanceof List))
                         return;
                     List<?> list = (List<?>) param.args[1];
                     if (list.isEmpty())
                         return;
                     for (int i = list.size() - 1; i >= 0; i--) {
-                        if (list.get(i).getClass() == FeedAdvert) {
+                        if (isFeedAdvert(list.get(i))) {
                             list.remove(i);
                         }
                     }
                 }
             }
         });
-        try {
-            XposedHelpers.findAndHookMethod(Helper.MorphAdHelper, "resolve", Context.class, FeedAdvert, boolean.class, Boolean.class, new XC_MethodHook() {
+        if (resolveFeedAdParam != null) {
+            XposedBridge.hookMethod(resolveFeedAdParam, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
                     if (Helper.prefs.getBoolean("switch_mainswitch", false) && Helper.prefs.getBoolean("switch_feedad", true)) {
@@ -89,7 +98,6 @@ public class FeedAd implements IHook {
                     }
                 }
             });
-        } catch (NoSuchMethodError ignore) {
         }
         try {
             XposedHelpers.findAndHookMethod(Helper.MorphAdHelper, "resolve", Context.class, ListAd, Boolean.class, new XC_MethodHook() {
@@ -118,5 +126,9 @@ public class FeedAd implements IHook {
                 }
             }
         });
+    }
+
+    private static boolean isFeedAdvert(Object item) {
+        return item != null && FeedAdvert != null && FeedAdvert.isInstance(item);
     }
 }

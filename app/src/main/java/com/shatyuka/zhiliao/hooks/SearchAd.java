@@ -1,13 +1,13 @@
 package com.shatyuka.zhiliao.hooks;
 
 import com.shatyuka.zhiliao.Helper;
-
+import com.shatyuka.zhiliao.xposed.XC_MethodHook;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.LinkedList;
-
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
+import java.util.List;
 
 public class SearchAd implements IHook {
     static LinkedList<Method> converts = new LinkedList<>();
@@ -15,6 +15,7 @@ public class SearchAd implements IHook {
     static Field SearchTopTabsItemList_commercialData;
     static Field PresetWords_preset;
     static Field SearchRecommendQuery_content;
+    static Field SearchRecommendQuery_commercialData;
     static Field SearchRecommendQuery_recommendQueries;
     static Field HotSearchBean_searchHotList;
 
@@ -50,7 +51,7 @@ public class SearchAd implements IHook {
         try {
             Class<?> SearchTopTabsItemList = classLoader.loadClass("com.zhihu.android.api.model.SearchTopTabsItemList");
             SearchTopTabsItemList_commercialData = SearchTopTabsItemList.getField("commercialData");
-        } catch (ClassNotFoundException ignored) {
+        } catch (ClassNotFoundException | NoSuchFieldException ignored) {
         }
 
         try {
@@ -61,6 +62,12 @@ public class SearchAd implements IHook {
             }
             try {
                 SearchRecommendQuery_recommendQueries = SearchRecommendQuery.getField("recommendQueries");
+            } catch (NoSuchFieldException ignored) {
+            }
+            try {
+                Field commercialData = SearchRecommendQuery.getField("commercialData");
+                if (commercialData.getType() == List.class)
+                    SearchRecommendQuery_commercialData = commercialData;
             } catch (NoSuchFieldException ignored) {
             }
         } catch (ClassNotFoundException ignored) {
@@ -91,7 +98,8 @@ public class SearchAd implements IHook {
                                 break;
                             }
                             case "com.zhihu.android.api.model.PresetWords": {
-                                PresetWords_preset.set(result, null);
+                                if (PresetWords_preset != null)
+                                    PresetWords_preset.set(result, null);
                                 break;
                             }
                             case "com.zhihu.android.api.model.SearchRecommendQuery": {
@@ -99,6 +107,8 @@ public class SearchAd implements IHook {
                                     SearchRecommendQuery_content.set(result, null);
                                 if (SearchRecommendQuery_recommendQueries != null)
                                     SearchRecommendQuery_recommendQueries.set(result, null);
+                                if (SearchRecommendQuery_commercialData != null)
+                                    SearchRecommendQuery_commercialData.set(result, Collections.emptyList());
                                 break;
                             }
                             case "com.zhihu.android.api.model.HotSearchBean": {
