@@ -389,7 +389,10 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.height(14.dp))
                 Button(
                     onClick = {
-                        putBoolean("accept_eula", true)
+                        // eulaAccepted 只在 reloadValues() 里从磁盘读，原来点完只写了磁盘、没更新这个状态：
+                        // 免责声明一直挂着，看起来就像按钮点不动，非得退出重进一次。
+                        preferences?.edit()?.putBoolean("accept_eula", true)?.apply()
+                        eulaAccepted = true
                         // 界面把总开关显示成「已开启」，但每个 Hook 读 switch_mainswitch 的缺省值都是 false。
                         // 首次同意时补一个真值，否则新用户看到的开关是开的，功能却一个都不生效。
                         if (preferences?.contains("switch_mainswitch") != true) {
