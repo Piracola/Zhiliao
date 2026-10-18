@@ -31,6 +31,20 @@
 > 第二阶段第 12 项的下半截（自动降级）也完成：`HookStatus` 记「功能 → 设置项」映射，Hook 失败时随回执
 > 发 `failedKeys`，设置页把对应开关置灰、副标题改成"当前知乎版本暂不支持"。真机预演过正反两遍
 > （`cmd unsupported` 标记 → 去搜索广告变灰；`clear` 复位 → 恢复正常）。单测 52 条。
+>
+> 2026-10-18 审阅外部反馈的五条问题后的处置：`AutoRefresh` 的 DexKit 兜底移出主线程——名单和解析缓存
+> 照旧在 `init()` 里做，扫 dex 放后台线程、命中后补装 Hook，结果写进 `ResolutionCache`；自检的记账 key
+> 改在装 Hook 时拼一次，命中路径不再拼字符串；`CommentAd` 的模型验证器从"公开且非抽象"收紧成
+> "FeedAdvert 的具体子类"，绑定方法改收实例方法（11.10 的 `V70#J1` 是实例方法，旧代码只收 static，
+> 结果是装了但一次都不会进来）；`StatusBar` 删掉方法体为空的 `ThemeChangedEvent` 构造钩子。
+> "老配置检测读错目录"那条不成立：旧文件本来就该从知乎私有目录读（见 DEVELOPMENT.md），未改。
+> 单测 88 条通过；另外用 11.11.0/41106 官方包反转出的审计 JAR 做了静态确认（模型仍继承 `FeedAdvert`，
+> 绑定仍是实例方法 `V70#J1`），真机行为待跑。
+>
+> 同日晚：修掉云端 Android CI 自迁移以来一直红的原因——CI 没有 11.x 的审计 JAR，`HookTest` 落到仓库里
+> 上游遗留的 6–8.x 老 JAR 上，新增的 AutoRefresh 断言和 ExternLink 目标自然对不上。现在 `HookTest`
+> 只认 `ZHILIAO_TEST_DIR` / `targetapp/jars`，没准备就整类跳过；`app/test` 那批 2019 年的老 JAR 一并删掉。
+> 兼容性解析留给每日巡检（用真实最新包）。
 
 ## 第〇阶段：独立设置 App（miuix）
 

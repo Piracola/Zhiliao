@@ -2,6 +2,7 @@ package com.shatyuka.zhiliao.hooks;
 
 import com.shatyuka.zhiliao.DexKitFallback;
 import com.shatyuka.zhiliao.Helper;
+import com.shatyuka.zhiliao.ResolutionCache;
 import com.shatyuka.zhiliao.TargetResolver;
 import com.shatyuka.zhiliao.xposed.XC_MethodHook;
 import com.shatyuka.zhiliao.xposed.XposedBridge;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AutoRefresh implements IHook {
     /**
@@ -39,6 +41,9 @@ public class AutoRefresh implements IHook {
     private static final String TAB_CLICK = "TabClick";
     private static final String APP_START = "AppStart";
     private static final String AUTO_REFRESH_PREFIX = "AutoRefresh";
+    private static final String FEATURE = "禁止自动刷新";
+    /** DexKit 兜底扫到的类名，下次冷启动直接试，别为同一个渠道包反复扫 dex。 */
+    private static final String DEXKIT_CACHE_KEY = "autoRefresh.feedCacheWriter.dexkit";
 
     /** 已知的用户主动刷新：放行并撤销冷启动抑制。 */
     private static final Set<String> USER_REFRESH = new java.util.HashSet<>(java.util.Arrays.asList(
@@ -48,7 +53,11 @@ public class AutoRefresh implements IHook {
     static Method tryRefresh;
     static Method postRefreshSucceed;
     /** FeedLocalDataSource#void(FeedList)：网络结果写回推荐缓存 */
-    static Method feedCacheWrite;
+    static volatile Method feedCacheWrite;
+    /** 主线程（名单命中）和后台线程（DexKit 兜底）可能同时想装这条 Hook，只允许一次生效 */
+    private static final AtomicBoolean cacheWriteHookInstalled = new AtomicBoolean();
+    /** 后台 dex 扫描已经放出去，自检日志据此说明"暂时没有"还是"还在找" */
+    private static volatile boolean dexKitScanStarted;
     static Class<?> FeedList;
     static Field FeedList_isCache;
     /** 刷新入口与其对应的来源名方法；不同重载的 refreshType 类型可能不同，两者按入口配对 */
@@ -67,7 +76,7 @@ public class AutoRefresh implements IHook {
 
     @Override
     public String getName() {
-        return "禁止自动刷新";
+        return FEATURE;
     }
 
     @Override
@@ -106,7 +115,8 @@ public class AutoRefresh implements IHook {
                 + " 用户刷新判定=" + (userRefreshMethod != null)
                 + " 丢弃网络结果=" + canSuppressNetworkResult()
                 + " 缓存冻结=" + (feedCacheWrite != null
-                ? feedCacheWrite.getDeclaringClass().getName() + "#" + feedCacheWrite.getName() : "无"));
+                ? feedCacheWrite.getDeclaringClass().getName() + "#" + feedCacheWrite.getName()
+                : dexKitScanStarted ? "后台定位中" : "无"));
     }
 
     /**
@@ -124,7 +134,7 @@ public class AutoRefresh implements IHook {
 
     @Override
     public void hook() throws Throwable {
-        if (!Helper.prefs.getBoolean("switch_mainswitch", false) || !Helper.prefs.getBoolean("switch_autorefresh", false)) {
+        if (!isEnabled()) {
             return;
         }
         if (returnTopOrRefresh != null) {
@@ -158,26 +168,7 @@ public class AutoRefresh implements IHook {
             });
         }
         if (feedCacheWrite != null) {
-            XposedBridge.hookMethod(feedCacheWrite, new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    Object list = param.args.length > 0 ? param.args[0] : null;
-                    if (cacheWriteAllowed(list)) {
-                        if (isCacheList(list)) {
-                            cacheRendered = true;
-                        }
-                        return;
-                    }
-                    param.setResult(null);
-                    cacheBlockedCount++;
-                    if (!cacheBlockedLogged) {
-                        cacheBlockedLogged = true;
-                        XposedBridge.log("[Zhiliao][禁止自动刷新] 已拦截网络结果写回缓存"
-                                + "（" + feedCacheWrite.getDeclaringClass().getName() + "#"
-                                + feedCacheWrite.getName() + "）");
-                    }
-                }
-            });
+            installCacheWriteHook(false);
         }
         for (RefreshEntry entry : refreshEntries) {
             XposedBridge.hookMethod(entry.entry, new XC_MethodHook() {
@@ -383,10 +374,9 @@ public class AutoRefresh implements IHook {
     /**
      * 定位 FeedLocalDataSource 的 void(FeedList) 写入方法。
      *
-     * 先试候选名单（q0.x / b.b / o0.x 三个已知构建），再做结构校验：同一个类里要有
-     * "接收缓存回调接口" 的方法、无参 void（清缓存）和 String 字段（缓存键）。
-     * 名单落空时用 DexKit 按"参数恰好是 FeedList、返回 void、限定 feed 包"扫一遍，
-     * 同样要过结构校验，并且必须唯一命中。
+     * 主线程只做便宜的那部分：名单（q0.x / b.b / o0.x）和上次 DexKit 的结果，都是一次
+     * Class.forName + 结构校验。真正扫 dex 的兜底放后台线程——DexKit 要先加载原生库再遍历
+     * 整个 APK，换渠道包、名单落空的那次冷启动原来就卡在这里。
      */
     private static void findFeedCacheWriter(ClassLoader classLoader) {
         if (FeedList == null) {
@@ -398,31 +388,125 @@ public class AutoRefresh implements IHook {
             if (clazz != null) {
                 feedCacheWrite = findVoidFeedListMethod(clazz);
             }
-            if (feedCacheWrite != null) {
-                return;
-            }
-            List<Method> candidates = DexKitFallback.findMethodsBySignature(
-                    new String[]{"com.zhihu.android.app.feed"},
-                    new Class<?>[]{FeedList}, void.class, 64, classLoader);
-            Method unique = null;
-            for (Method method : candidates) {
-                if (!looksLikeLocalFeedStore(method.getDeclaringClass())) {
-                    continue;
-                }
-                if (unique != null) {
-                    XposedBridge.log("[Zhiliao][禁止自动刷新] 缓存写入候选不唯一，放弃冻结缓存");
-                    return;
-                }
-                unique = method;
-            }
-            if (unique != null) {
-                feedCacheWrite = unique;
-                XposedBridge.log("[Zhiliao][禁止自动刷新] 缓存写入由 DexKit 兜底定位: "
-                        + unique.getDeclaringClass().getName() + "#" + unique.getName());
+            if (feedCacheWrite == null) {
+                reuseDexKitResult(classLoader);
             }
         } catch (Throwable e) {
             XposedBridge.log("[Zhiliao][禁止自动刷新] 缓存写入定位失败: " + e);
         }
+        if (feedCacheWrite == null && isEnabled()) {
+            startDexKitScan(classLoader);
+        }
+    }
+
+    /** 上次 DexKit 扫到的类名；指纹（知乎版本 + 名单 revision + APK）变了 ResolutionCache 会整份作废。 */
+    private static void reuseDexKitResult(ClassLoader classLoader) {
+        String cached = ResolutionCache.peek(DEXKIT_CACHE_KEY);
+        if (cached == null || cached.isEmpty()) {
+            return;
+        }
+        try {
+            Class<?> clazz = Class.forName(cached, false, classLoader);
+            if (!looksLikeLocalFeedStore(clazz)) {
+                return;
+            }
+            feedCacheWrite = findVoidFeedListMethod(clazz);
+            if (feedCacheWrite != null) {
+                XposedBridge.log("[Zhiliao][禁止自动刷新] 缓存写入沿用上次兜底定位：" + cached);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 后台扫 dex，命中后补装 Hook；扫描失败就维持"屏幕不刷新但不冻结缓存"的降级状态。 */
+    private static void startDexKitScan(final ClassLoader classLoader) {
+        dexKitScanStarted = true;
+        Thread thread = new Thread(() -> {
+            try {
+                Method unique = scanCacheWriterBySignature(classLoader);
+                if (unique == null) {
+                    return;
+                }
+                feedCacheWrite = unique;
+                ResolutionCache.remember(DEXKIT_CACHE_KEY, unique.getDeclaringClass().getName());
+                XposedBridge.log("[Zhiliao][禁止自动刷新] 缓存写入由 DexKit 兜底定位: "
+                        + unique.getDeclaringClass().getName() + "#" + unique.getName());
+                installCacheWriteHook(true);
+            } catch (Throwable e) {
+                XposedBridge.log("[Zhiliao][禁止自动刷新] 后台兜底定位失败: " + e);
+            }
+        }, "ZhiliaoAutoRefreshResolve");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /**
+     * 按"参数恰好是 FeedList、返回 void、限定 feed 包"扫一遍，结果必须过结构校验且唯一。
+     * 候选不唯一时宁可不冻结缓存，也不赌其中一个。
+     */
+    private static Method scanCacheWriterBySignature(ClassLoader classLoader) {
+        List<Method> candidates = DexKitFallback.findMethodsBySignature(
+                new String[]{"com.zhihu.android.app.feed"},
+                new Class<?>[]{FeedList}, void.class, 64, classLoader);
+        Method unique = null;
+        for (Method method : candidates) {
+            if (!looksLikeLocalFeedStore(method.getDeclaringClass())) {
+                continue;
+            }
+            if (unique != null) {
+                XposedBridge.log("[Zhiliao][禁止自动刷新] 缓存写入候选不唯一，放弃冻结缓存");
+                return null;
+            }
+            unique = method;
+        }
+        return unique;
+    }
+
+    /** 名单命中的主线程与 DexKit 的后台线程都会走到这里；CAS 保证只装一次。 */
+    private static void installCacheWriteHook(boolean late) {
+        final Method target = feedCacheWrite;
+        if (target == null || !isEnabled()) {
+            return;
+        }
+        if (!cacheWriteHookInstalled.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            XposedBridge.hookMethod(target, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    Object list = param.args.length > 0 ? param.args[0] : null;
+                    if (cacheWriteAllowed(list)) {
+                        if (isCacheList(list)) {
+                            cacheRendered = true;
+                        }
+                        return;
+                    }
+                    param.setResult(null);
+                    cacheBlockedCount++;
+                    if (!cacheBlockedLogged) {
+                        cacheBlockedLogged = true;
+                        XposedBridge.log("[Zhiliao][禁止自动刷新] 已拦截网络结果写回缓存"
+                                + "（" + target.getDeclaringClass().getName() + "#"
+                                + target.getName() + "）");
+                    }
+                }
+            }, FEATURE);
+            if (late) {
+                XposedBridge.log("[Zhiliao][自检] 禁止自动刷新 缓存写入 Hook 已补装："
+                        + target.getDeclaringClass().getName() + "#" + target.getName());
+            }
+        } catch (Throwable e) {
+            cacheWriteHookInstalled.set(false);
+            XposedBridge.log("[Zhiliao][禁止自动刷新] 缓存写入 Hook 安装失败: " + e);
+        }
+    }
+
+    /** 开关没开就不该替它扫 dex——换渠道包的那次冷启动代价，不该由不用这个功能的人付。 */
+    private static boolean isEnabled() {
+        return Helper.prefs != null
+                && Helper.prefs.getBoolean("switch_mainswitch", false)
+                && Helper.prefs.getBoolean("switch_autorefresh", false);
     }
 
     private static Method findVoidFeedListMethod(Class<?> clazz) {

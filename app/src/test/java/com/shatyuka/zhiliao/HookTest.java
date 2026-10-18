@@ -30,6 +30,8 @@ import com.shatyuka.zhiliao.hooks.VIPBanner;
 import com.shatyuka.zhiliao.hooks.WebView;
 import com.shatyuka.zhiliao.hooks.AntiTracking;
 
+import org.junit.Assume;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.File;
@@ -50,9 +52,7 @@ public class HookTest {
     static LinkedList<PackageInfo> packageInfos = new LinkedList<>();
 
     static {
-        String configuredPath = System.getenv("ZHILIAO_TEST_DIR");
-        File path = configuredPath == null || configuredPath.isEmpty()
-                ? new File("test") : new File(configuredPath);
+        File path = testDir();
         System.out.println("Hook test samples: " + path.getAbsolutePath());
         File[] files = path.listFiles();
         if (files != null) {
@@ -74,6 +74,29 @@ public class HookTest {
             }
         }
         loadCandidateAsset();
+    }
+
+    /**
+     * 审计 JAR 目录：环境变量优先，其次项目根目录的 targetapp/jars（Gradle 单测的工作目录是 app/）。
+     * 不猜旧目录——仓库里没有 11.x 的 JAR 时，这个类会整体跳过，兼容性解析交给每日巡检去跑。
+     */
+    private static File testDir() {
+        String configured = System.getenv("ZHILIAO_TEST_DIR");
+        if (configured != null && !configured.isEmpty()) {
+            return new File(configured);
+        }
+        for (File candidate : new File[]{new File("../targetapp/jars"), new File("targetapp/jars")}) {
+            if (candidate.isDirectory()) {
+                return candidate;
+            }
+        }
+        return new File("../targetapp/jars");
+    }
+
+    @BeforeClass
+    public static void requireAuditJars() {
+        Assume.assumeTrue("没准备审计 JAR（tools/prepare-target.ps1 或 ZHILIAO_TEST_DIR），本次跳过 Hook 兼容性测试",
+                !packageInfos.isEmpty());
     }
 
     /**
@@ -164,7 +187,26 @@ public class HookTest {
 
     @Test
     public void commentAdTest() {
-        checkHook(new CommentAd());
+        for (PackageInfo packageInfo : packageInfos) {
+            try {
+                resetState(CommentAd.class);
+                Helper.initSharedClasses(packageInfo.classLoader);
+                new CommentAd().init(packageInfo.classLoader);
+            } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                System.out.println("skip 去评论广告 on " + packageInfo.name + ": " + e.getMessage());
+                continue;
+            } catch (Throwable e) {
+                throw new AssertionError("去评论广告, " + packageInfo.name, e);
+            }
+            org.junit.Assert.assertTrue("评论广告模型没解析到（" + packageInfo.name + "）",
+                    CommentAd.hasModel());
+            org.junit.Assert.assertTrue("评论广告只认了模型、没有任何拦截路径（" + packageInfo.name + "）",
+                    CommentAd.canIntercept());
+            if (CommentAd.hasBindMethod()) {
+                org.junit.Assert.assertTrue("评论广告绑定方法必须是实例方法：hook 靠 thisObject 取 itemView",
+                        CommentAd.bindCarriesHolder());
+            }
+        }
     }
 
     @Test

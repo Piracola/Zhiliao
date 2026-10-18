@@ -40,7 +40,8 @@ jobs:
             echo releaseStoreFile='${{ github.workspace }}/key.jks' >> gradle.properties
             echo ${{ secrets.KEY_STORE }} | base64 --decode > key.jks
           fi
-      - name: Test compatibility resolvers
+      - name: Run unit tests
+        # 纯逻辑单测；HookTest 需要审计 JAR，没准备时整类跳过。目标解析的兼容性由每日巡检（compat-patrol）负责。
         run: bash ./gradlew testDebugUnitTest
       - name: Build with Gradle
         run: bash ./gradlew -PappVerName=${{ env.VERSION }} assembleRelease

@@ -80,7 +80,7 @@ public class Helper {
 
             // 配置通道：LSPosed 远端偏好（模块 App 写、Hook 侧只读）。
             // 旧版设置文件不再参与读取——只提示一次，让用户在新设置页重新确认。
-            detectLegacyPreferences(remotePreferences);
+            detectLegacyPreferences();
             // 命令行调试口：adb 发广播改开关，覆盖值优先于远端偏好
             DebugBridge.install(context);
             prefs = withDebugOverrides(remotePreferences);
@@ -179,14 +179,6 @@ public class Helper {
         };
     }
 
-    /**
-     * 旧版设置只做检测，不再默默生效。
-     *
-     * 之前是"远端缺键就回落旧文件"，结果是 App 按默认值显示全关、Hook 按旧文件里的开关干活
-     * （旧配置里开着的过滤视频/过滤文章/禁止自动刷新就够让首页空着），
-     * 用户看到的是一个"设置全关但首页空白"的知乎。现在两侧只认远端偏好，
-     * 第一次发现旧配置时提示一次，请用户在新设置页重新确认。
-     */
     /** 云端兼容性配置：payload 与 revision 由设置 App 验签通过后写入远端偏好，只有比内置新才采纳。 */
     private static void applyCloudCompatibility(SharedPreferences remote) {
         try {
@@ -208,10 +200,17 @@ public class Helper {
         }
     }
 
-    private static void detectLegacyPreferences(SharedPreferences remote) {
-        if (remote == null) {
-            return;
-        }
+    /**
+     * 旧版设置只做检测，不再默默生效。
+     *
+     * 老版本的开关写在知乎自己的数据目录（zhiliao_preferences.xml），Hook 侧是唯一读得到它的地方；
+     * 现在两侧只认远端偏好，第一次发现旧文件时提示一次，请用户在新设置页重新确认。
+     *
+     * 之前是"远端缺键就回落旧文件"，结果是 App 按默认值显示全关、Hook 按旧文件里的开关干活
+     * （旧配置里开着的过滤视频/过滤文章/禁止自动刷新就够让首页空着），
+     * 用户看到的是一个"设置全关但首页空白"的知乎。
+     */
+    private static void detectLegacyPreferences() {
         try {
             SharedPreferences legacy = context.getSharedPreferences("zhiliao_preferences", Context.MODE_PRIVATE);
             int count = legacy.getAll().size();

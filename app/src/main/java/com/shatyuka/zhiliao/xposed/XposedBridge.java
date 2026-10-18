@@ -55,15 +55,25 @@ public final class XposedBridge {
     }
 
     public static XC_MethodHook.Unhook hookMethod(Member hookMethod, XC_MethodHook callback) {
+        return hookMethod(hookMethod, callback, currentFeature);
+    }
+
+    /**
+     * 指定功能名的安装重载：后台线程补装 Hook 时 {@link #currentFeature} 早已被清空，
+     * 不能再靠那个全局变量，否则自检会记到"?"名下。
+     */
+    public static XC_MethodHook.Unhook hookMethod(Member hookMethod, XC_MethodHook callback, String feature) {
         if (!(hookMethod instanceof Method) && !(hookMethod instanceof Constructor<?>))
             throw new IllegalArgumentException("Only methods and constructors can be hooked: " + hookMethod);
         if (framework == null)
             throw new IllegalStateException("XposedBridge is not attached to the framework");
-        final String feature = currentFeature;
         final String target = signatureOf(hookMethod);
-        SelfCheck.installed(feature, target);
+        // 命中路径很热：记账用的 key 和"首次命中"日志都在安装时拼好，intercept 里只做一次 set.add
+        final String selfCheckKey = SelfCheck.keyOf(feature, target);
+        final String firedMessage = "[自检][命中] " + (feature == null ? "" : feature + " ") + target;
+        SelfCheck.installedKey(selfCheckKey);
         XposedInterface.HookHandle handle = framework.hook((Executable) hookMethod)
-                .intercept(chain -> intercept(callback, chain, feature, target));
+                .intercept(chain -> intercept(callback, chain, selfCheckKey, firedMessage));
         hookCount.incrementAndGet();
         return new XC_MethodHook.Unhook(hookMethod, handle);
     }
@@ -100,12 +110,12 @@ public final class XposedBridge {
     }
 
     private static Object intercept(XC_MethodHook callback, XposedInterface.Chain chain,
-                                    String feature, String target) throws Throwable {
+                                    String selfCheckKey, String firedMessage) throws Throwable {
         XC_MethodHook.MethodHookParam param = new XC_MethodHook.MethodHookParam(
                 chain.getExecutable(), chain.getThisObject(), chain.getArgs().toArray());
-        if (SelfCheck.fire(feature, target)) {
+        if (SelfCheck.fireKey(selfCheckKey)) {
             // 每个目标只记第一条：这是"确实拦到了"的证据，也是"装了却没进这里"的对照
-            log("[自检][命中] " + (feature == null ? "" : feature + " ") + target);
+            log(firedMessage);
         }
 
         try {

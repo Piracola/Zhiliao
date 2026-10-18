@@ -23,14 +23,32 @@ public final class SelfCheck {
     private SelfCheck() {
     }
 
+    /**
+     * 把"功能|目标"拼成记账用的 key。Hook 安装时拼一次即可：
+     * 命中路径只传 key，不再每次调用都做字符串拼接。
+     */
+    public static String keyOf(String feature, String target) {
+        return (feature == null || feature.isEmpty() ? "?" : feature) + "|" + target;
+    }
+
     /** 记录一个已安装的目标（Hook 安装成功时调用）。 */
     public static void installed(String feature, String target) {
-        installed.add(key(feature, target));
+        installedKey(keyOf(feature, target));
     }
 
     /** 记录一次命中；首次返回 true，调用方据此只打一条日志。 */
     public static boolean fire(String feature, String target) {
-        return fired.add(key(feature, target));
+        return fireKey(keyOf(feature, target));
+    }
+
+    /** 同 {@link #installed}，但 key 已由 {@link #keyOf} 预先拼好。 */
+    public static void installedKey(String key) {
+        installed.add(key);
+    }
+
+    /** 同 {@link #fire}，但 key 已由 {@link #keyOf} 预先拼好——命中路径的常态。 */
+    public static boolean fireKey(String key) {
+        return fired.add(key);
     }
 
     public static int installedCount() {
@@ -69,9 +87,5 @@ public final class SelfCheck {
     static void reset() {
         installed.clear();
         fired.clear();
-    }
-
-    private static String key(String feature, String target) {
-        return (feature == null || feature.isEmpty() ? "?" : feature) + "|" + target;
     }
 }

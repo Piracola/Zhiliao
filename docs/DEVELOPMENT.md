@@ -48,12 +48,14 @@ $env:ZHILIAO_TEST_DIR = (Resolve-Path '.\targetapp\jars').Path
 2. 类名会变化时，用接口、父类、字段类型和方法签名组合识别。
 3. 方法名会变化时，使用 `TargetResolver` 按参数、返回值、修饰符和稳定顺序解析。
 4. 只有无法枚举目标包时才增加候选类名；不要继续堆叠版本号判断。
-5. 如果目标跨包移动或没有可枚举名称，再引入 DexKit，用字符串和调用关系查找。`TargetResolver` 应继续作为统一入口，避免业务 Hook 直接依赖 DexKit。唯一的破例是 `AutoRefresh` 用 `findMethodsBySignature` 按精确签名找缓存写入方法——签名是结构信息，不是混淆名。
+5. 如果目标跨包移动或没有可枚举名称，再引入 DexKit，用字符串和调用关系查找。`TargetResolver` 应继续作为统一入口，避免业务 Hook 直接依赖 DexKit。唯一的破例是 `AutoRefresh` 用 `findMethodsBySignature` 按精确签名找缓存写入方法——签名是结构信息，不是混淆名；这条扫描只在后台线程跑，结果记进 `ResolutionCache`，下次冷启动不重复扫。
 6. 包内混淆名按 R8 的顺序 `a` … `z`、`a0` … `z0`、`a1` … 递增，`Helper.findClass` 的 `cycleRound` 就是枚举窗口，每轮 26 个名字。窗口不够时定位会直接失败：11.10.0 的 `WebViewClientWrapper` 已经排到 `com.zhihu.android.app.mercury.web.z0`，刚好落在 `cycleRound = 2` 之外，需要放宽到 3 轮。定位失败时先数清目标包里的类，再决定窗口大小。
 7. 同一 `versionCode` 的不同渠道包混淆名可能完全不同（如 11.10.0 的 market 包与小米包）：`targetapp/jars` 里的审计 JAR 只代表那一份构建。定位一律按结构/签名，运行期常量（例如刷新来源名 `Pull` / `TabClick`）比类名和方法名稳定；改动后必须用真机日志确认。
 8. 静态找不到真目标时，可以从真机 `base.apk` 重新生成审计 JAR，再配合 `[自检][触发]` 追踪与临时打印调用栈的 Hook 定位真实链路（AutoRefresh 就是这么定位到 `CommonReturnTopDelegate` 的）。
 
 每个 Hook 的 `init()` 必须完成全部目标解析，`hook()` 只负责安装 Hook。这样 JVM 兼容性测试可以在没有 LSPosed 的情况下发现大多数版本变化。
+
+唯一的例外是"目标解析本身很贵"的情况：`AutoRefresh` 的 DexKit 兜底要在启动时扫整个 APK，不能放在主线程。约定是 `init()` 只做名单/解析缓存这类一次 `Class.forName` 的便宜解析，扫 dex 交给后台线程，扫到后由后台线程补装那一条 Hook（`XposedBridge.hookMethod(member, callback, feature)` 显式带功能名，不依赖安装期的 `currentFeature`）。新增同类目标时照这个形状写，别再往主线程塞扫描。
 
 ## 真机验证
 
@@ -84,6 +86,7 @@ $env:ZHILIAO_TEST_DIR = (Resolve-Path '.\targetapp\jars').Path
 - **扫的是宿主的 APK**（`Helper.context.getApplicationInfo().sourceDir`），不是模块自己的 APK——扫错对象会一个都命中不了，而且不报错。
 - **R8 必须保留 dexkit 类**：`-keep class org.luckypray.dexkit.** { *; }`。native 侧按类名/签名对齐，被 `-repackageclasses` 挪走就崩。
 - **规则从严**：限定 `com.zhihu.android` 包、结果数超过上限直接放弃、必须带运行期字符串锚点；扫描完立刻 `close()`，不挂在知乎整个生命周期。
+- **不许跑在主线程**：DexKit 要先 `System.load` 原生库再遍历整个 APK，换渠道包、候选名单落空的那次冷启动如果同步扫，界面会停在这里。`AutoRefresh` 把它放在 `ZhiliaoAutoRefreshResolve` 后台线程，命中后补装 Hook；扫到的类名写进 `ResolutionCache`（键 `autoRefresh.feedCacheWriter.dexkit`），指纹变化时随缓存整份作废。开关没开时连这个线程都不起。
 - 探针：`adb shell am broadcast -a com.shatyuka.zhiliao.DEBUG --es cmd dex`（不带 `--es str` 跑诊断，带则按字符串锚点查询）。真机结果：`dex=18 包内类=118757 按全名命中=1 RecyclerView.Adapter子类=130 含"Pull"=33`。
 
 现在接的只有「精简文章页面」一处：名单落空时按"有 `getItemCount` 且持有 Fragment 字段"扫一遍，扫出唯一一个才用，0 个或多个都退回原来的结构化链。真机上这条结构规则还没命中（知乎的适配器隔着一层自家基类），所以目前等于安全的空转——不影响任何现有功能。规则怎么调准，记在 ROADMAP 第三阶段。
@@ -92,6 +95,8 @@ $env:ZHILIAO_TEST_DIR = (Resolve-Path '.\targetapp\jars').Path
 ## 兼容性巡检 CI
 
 .github/workflows/compat-patrol.yml，每天一次（UTC 20:00，约北京时间 04:00），也能手动触发。流程：问官网入口要最新包 → tools/verify-zhihu-apk.ps1 校验包名/版本/签名证书 → tools/prepare-target.ps1 生成审计 JAR → gradlew testDebugUnitTest -PskipNativeBuild → 失败自动开 issue（已有同名未关闭 issue 时不再开新的）。
+
+普通 push 的 Android CI 不下载知乎 APK：`HookTest` 在 `ZHILIAO_TEST_DIR` 和 `targetapp/jars` 都没有审计 JAR 时整类跳过，只跑纯逻辑单测；目标解析的兼容性只由巡检用真实包验证。所以「本地绿、CI 也绿」不等于解析没坏——发版前要么跑一次 `prepare-target.ps1`，要么看巡检结果。
 
 开箱即用时不用配任何变量：下载地址问知乎官网入口要，受信证书指纹写在 `tools/zhihu-trusted-certs.txt`（公开信息，随仓库走）。下面这些只在特殊情况下才用：
 

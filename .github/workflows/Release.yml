@@ -48,7 +48,8 @@ jobs:
           else
             echo "::warning::KEY_STORE is not configured, the release APK will be signed with the debug key"
           fi
-      - name: Test compatibility resolvers
+      - name: Run unit tests
+        # HookTest 要靠审计 JAR，发布机不下载知乎 APK 时整类跳过；目标解析兼容性由每日巡检兜底。
         run: bash ./gradlew testDebugUnitTest
       - name: Build with Gradle
         run: bash ./gradlew -PappVerName=${{ env.VERSION }} assembleRelease
