@@ -28,6 +28,12 @@
 -keepclassmembers,allowoptimization class ** implements io.github.libxposed.api.XposedInterface$Hooker {
     public java.lang.Object intercept(io.github.libxposed.api.XposedInterface$Chain);
 }
+# zxing 的 EncodeHintType/ErrorCorrectionLevel 经 EnumMap 反射取值，混淆后会拿不到枚举常量
+-keep class com.google.zxing.EncodeHintType { *; }
+-keep class com.google.zxing.qrcode.decoder.ErrorCorrectionLevel { *; }
+# DexKit 的 native 侧按 java 类名/方法签名对齐，被 -repackageclasses 挪走或改名会直接崩
+-keep class org.luckypray.dexkit.** { *; }
+-keep class com.google.flatbuffers.** { *; }
 -repackageclasses "zhiliao"
 -allowaccessmodification
 -overloadaggressively

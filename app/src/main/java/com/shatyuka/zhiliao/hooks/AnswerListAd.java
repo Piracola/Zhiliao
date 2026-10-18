@@ -2,6 +2,7 @@ package com.shatyuka.zhiliao.hooks;
 
 import android.content.Context;
 import com.shatyuka.zhiliao.Helper;
+import com.shatyuka.zhiliao.TargetResolver;
 import com.shatyuka.zhiliao.xposed.XC_MethodHook;
 import com.shatyuka.zhiliao.xposed.XposedBridge;
 import com.shatyuka.zhiliao.xposed.XposedHelpers;
@@ -22,10 +23,16 @@ public class AnswerListAd implements IHook {
             AnswerListWrapper = classLoader.loadClass("com.zhihu.android.question.api.model.AnswerListWrapper");
         } catch (ClassNotFoundException ignored) {
         }
-        try {
-            AnswerListAd = classLoader.loadClass("com.zhihu.android.api.model.AnswerListAd");
-        } catch (ClassNotFoundException e) {
-            AnswerListAd = classLoader.loadClass("com.zhihu.android.adbase.model.AnswerListAd");
+        // 包名随渠道变（api.model / adbase.model），顺序交给候选名单
+        AnswerListAd = TargetResolver.findClassByQualifiedCandidates(classLoader, "answerListAd.model",
+                clazz -> "AnswerListAd".equals(clazz.getSimpleName())
+                        && java.lang.reflect.Modifier.isPublic(clazz.getModifiers()));
+        if (AnswerListAd == null) {
+            try {
+                AnswerListAd = classLoader.loadClass("com.zhihu.android.api.model.AnswerListAd");
+            } catch (ClassNotFoundException e) {
+                AnswerListAd = classLoader.loadClass("com.zhihu.android.adbase.model.AnswerListAd");
+            }
         }
     }
 

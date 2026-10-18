@@ -27,7 +27,6 @@ public class RedDot implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
-        // 11.10.0: onUnReadCountLoaded、ZHMainTabLayout.d、NotiUnreadCountKt.hasUnread、RevisitView 均已消失，解析到才装
         try {
             Class<?> BottomNavMenuItemView = classLoader.loadClass("com.zhihu.android.bottomnav.core.BottomNavMenuItemView");
             BottomNavMenuItemView_setUnreadCount = Helper.getMethodByParameterTypes(BottomNavMenuItemView, int.class);

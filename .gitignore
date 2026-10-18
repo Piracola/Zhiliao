@@ -9,3 +9,5 @@
 /backup
 app/.cxx
 targetapp/*
+.kotlin/
+zhihu-apk-info.json

@@ -94,3 +94,28 @@
 - **AutoRefresh 二次修复（2026-09-24）**：从真机拉取 base.apk → dex2jar 得到 targetapp/jars/xiaomi 11.10.0 41012.jar，用它 + 真机 hook 追踪（打印调用栈）定位真实刷新链路：
   BottomNavView.c → MainActivity.onTabReselected → MainDelegation.c → CommonReturnTopDelegate 的 onTabReselected 监听 → FeedFragment.a(boolean, TabClick)，再按刷新来源名拦截。
   真机日志：`[Zhiliao][禁止自动刷新] 已拦截 TabClick`；单测对两份 JAR 均通过。
+- **AutoRefresh 三次修复 · 冷启动自动刷新（2026-09-24）**：真机日志里冷启动时 `FeedFragment#a/b`（已 Hook 的刷新入口）被调用却没有「已拦截」行 —— 说明来源名不在拦截名单里。
+  静态定位（xiaomi 审计 JAR）：`FeedFragment.refresh(boolean)` 按入参选来源，`true → Pull(用户下拉)`、`false → AppStart(冷启动自动刷新)`；来源名全集在 `com.zhihu.android.feed.delegate.k` 的子类里，
+  共 Ad / AppStart / AutoRefreshBackground|DetailPage|OtherPage|SearchPage / Back / Growth / Preload / PrivacyChange / Pull / RefreshButton / RefreshGuideButton / RestoreState / TabClick。
+  修复：拦截名单加入 `AppStart`（原为 TabClick + AutoRefresh*）。
+  真机验证（同版本号本地构建 / 小米 2109119BC / Android 14 / LSPosed 2.2.0）：冷启动 `[禁止自动刷新][调试] 来源 AppStart` → `已拦截 AppStart`，首页仍显示上次的缓存内容（断网冷启动同样有内容）；
+  下拉刷新 `来源 Pull` 不拦截、`postRefreshSucceed` 正常触发；再点「首页」仍 `已拦截 TabClick`。
+  经验：`k.b()` 是知乎自己的「用户主动刷新」判定（Pull / TabClick / Back / RefreshButton 为 true，其余为 false），来源名列表可能随版本增删，名单失效时可改用它。
+- **AutoRefresh 四次修复 · 冷启动白屏（2026-10-18，知乎 11.11.0/41106）**：三次修复那套「按来源名拦截 `AppStart`」在 11.11.0 上会让推荐页整片空白——缓存渲染这条路本身就走刷新链路
+  （`FeedFragment.b(boolean, refreshType)` → 数据源先吐 `FeedList.isCache=true` 的缓存，再吐网络结果），入口一拦，缓存也一起没了，屏幕上只剩顶栏和底栏。
+  修复：`AppStart` 不再拦入口，改为放行整条链路，并在 `FeedFragment.postRefreshSucceed(ZHObjectList)` 里判断结果——带 `isCache` 标记的缓存照渲染，
+  紧随其后的网络结果 `setResult(null)` 丢弃；用户主动刷新（Pull / RefreshButton / Back，非 TabClick / AutoRefresh*）时清掉抑制状态，新内容照常进来。
+  首次安装没有缓存时第一份结果一律放行，避免「没缓存 + 丢结果」又白屏。
+  真机日志：`冷启动放行 AppStart` → `渲染 AppStart 的内容（缓存=true）` → `丢弃 AppStart 的网络结果，保留上次内容`；
+  截图确认第二次冷启动回到退出前那一屏，下拉刷新能换新内容，再点「首页」仍 `已拦截 TabClick`。
+  单测断言 `AutoRefresh.canSuppressNetworkResult()`（两份审计 JAR 都能解析到 `postRefreshSucceed`）：解析不到就退回旧拦截行为，不再静默白屏而无人知。
+- **AutoRefresh 五次修复 · 真正冻结缓存（2026-10-18，26.10.18，知乎 11.11.0/41106）**：四次修复只在 UI 层丢结果，数据层的请求照跑、结果照写缓存，
+  所以「下次冷启动」渲染的是上次启动拉到的那批，屏幕看着没刷新，内容却一格格往前挪。
+  这次不再拦请求，而是拦「网络结果写回推荐缓存」的那次写入：`FeedLocalDataSource` 的 `void(FeedList)` 方法，冷启动抑制期间直接跳过；缓存自己那份（`isCache=true`）照写，
+  用户下拉后的新内容也照写。首装没有缓存时放行第一份结果并主动写回，避免下次冷启动白屏。
+  定位不写死渠道包的混淆名：结构指纹是「`void(FeedList)` + 恰好两个方法的缓存回调接口 + 无参清缓存 + String 缓存键」，候选名单（官网 11.11 `q0.x#n`、小米 `b.b#a`、market 11.10 `o0.x`）
+  优先，落空时用 DexKit 按精确签名（参数 FeedList、返回 void、限定 `com.zhihu.android.app.feed`）扫一遍并要求唯一命中。
+  未知刷新来源改用 `refreshType` 自己的 boolean 判定（Pull / TabClick / Back / RefreshButton 为 true），避免新版本新增的自动来源被当成用户刷新放行。
+  真机验证（小米渠道包 + 官网包，各跑一轮）：两次冷启动内容逐字一致；下拉刷新内容变化；再冷启动与下拉后逐字一致。
+  日志：`缓存冻结=…b.b#a`（小米）/ `…q0.x#n`（官网）→ `渲染 AppStart 的缓存内容` → `已拦截网络结果写回缓存` → `丢弃 AppStart 的网络结果（第 1 份）`。
+  单测新增 `autoRefreshFreezesCacheOnEveryAuditJar`，对 11.10.0 的 market / 小米两份 JAR 断言缓存写入目标都能解析到。

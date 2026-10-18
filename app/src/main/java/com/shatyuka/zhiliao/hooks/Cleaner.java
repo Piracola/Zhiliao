@@ -1,12 +1,13 @@
 package com.shatyuka.zhiliao.hooks;
 
-import android.annotation.SuppressLint;
 import android.widget.Toast;
 import com.shatyuka.zhiliao.Helper;
+import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.text.CharacterIterator;
 import java.text.StringCharacterIterator;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 public class Cleaner implements IHook {
@@ -18,7 +19,6 @@ public class Cleaner implements IHook {
 
     static final Pattern regex_cache = Helper.compileRegex("(^\\d{4}-\\d{2}-\\d{2}$)|(^-?\\d+$)|(^[0-9a-fA-F]{32}$)");
 
-    @SuppressLint("DefaultLocale")
     public static String humanReadableByteCount(long bytes) {
         long absB = bytes == Long.MIN_VALUE ? Long.MAX_VALUE : Math.abs(bytes);
         if (absB < 1024) {
@@ -31,7 +31,7 @@ public class Cleaner implements IHook {
             ci.next();
         }
         value *= Long.signum(bytes);
-        return String.format("%.1f %cB", value / 1024.0, ci.current());
+        return String.format(Locale.US, "%.1f %cB", value / 1024.0, ci.current());
     }
 
     static class Filter implements FilenameFilter {
@@ -73,20 +73,25 @@ public class Cleaner implements IHook {
         return Helper.context.getFilesDir().listFiles(new Filter());
     }
 
-    @SuppressWarnings("ResultOfMethodCallIgnored")
     public static long doClean() {
         File[] files = getCacheFiles();
         long size = 0;
         for (File file: files) {
             try {
                 long fileSize = getFileSize(file);
+                boolean deleted;
                 if (file.isDirectory()) {
-                    Helper.deleteDirectory(file);
+                    deleted = Helper.deleteDirectory(file);
                 } else {
-                    file.delete();
+                    deleted = file.delete();
                 }
-                size += fileSize;
-            } catch (Exception ignored) {
+                if (deleted) {
+                    size += fileSize;
+                } else {
+                    XposedBridge.log("[Zhiliao][临时文件清理] 删除失败: " + file);
+                }
+            } catch (Exception e) {
+                XposedBridge.log("[Zhiliao][临时文件清理] 删除异常: " + file + " " + e);
             }
         }
         return size;

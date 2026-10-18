@@ -6,10 +6,12 @@ import android.net.Uri;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import com.shatyuka.zhiliao.Helper;
+import com.shatyuka.zhiliao.TargetResolver;
 import com.shatyuka.zhiliao.xposed.XC_MethodHook;
 import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.Map;
 import org.json.JSONObject;
 
@@ -31,25 +33,71 @@ public class ExternLink implements IHook {
     public void init(ClassLoader classLoader) throws Throwable {
         shouldOverrideUrlLoading = Helper.WebViewClientWrapper.getMethod("shouldOverrideUrlLoading", WebView.class, WebResourceRequest.class);
 
-        try {
-            H5Event = classLoader.loadClass("com.zhihu.android.app.mercury.api.a");
-        } catch (ClassNotFoundException e) {
-            H5Event = classLoader.loadClass("com.zhihu.android.app.mercury.a.a");
+        // H5Event 的形状：自己声明了一个 JSONObject 字段（就是传给插件的那份参数）
+        H5Event = TargetResolver.findClassByQualifiedCandidates(classLoader, "externLink.h5Event",
+                ExternLink::looksLikeH5Event);
+        if (H5Event == null) {
+            try {
+                H5Event = classLoader.loadClass("com.zhihu.android.app.mercury.api.a");
+            } catch (ClassNotFoundException e) {
+                H5Event = classLoader.loadClass("com.zhihu.android.app.mercury.a.a");
+            }
         }
 
         Class<?> BasePlugin2 = classLoader.loadClass("com.zhihu.android.app.mercury.plugin.BasePlugin2");
-        openUrl = BasePlugin2.getMethod("openUrl", H5Event);
-
-        try {
-            Class<?> IntentUtils = classLoader.loadClass("com.zhihu.android.app.router.IntentUtils");
-            openUrl2 = IntentUtils.getMethod("openUrl", Context.class, Uri.class, boolean.class, boolean.class);
-        } catch (Exception e) {
-            Class<?> IntentUtils = classLoader.loadClass("com.zhihu.android.app.router.c");
-            openUrl2 = IntentUtils.getMethod("a", Context.class, Uri.class, boolean.class, boolean.class);
+        openUrl = TargetResolver.findMethodByCandidates(BasePlugin2, "externLink.openUrlMethod", false,
+                method -> method.getReturnType() == void.class
+                        && Arrays.equals(method.getParameterTypes(), new Class<?>[]{H5Event}));
+        if (openUrl == null) {
+            openUrl = BasePlugin2.getMethod("openUrl", H5Event);
         }
 
-        H5Event_params = H5Event.getDeclaredField("i");
-        H5Event_params.setAccessible(true);
+        Class<?> IntentUtils = TargetResolver.findClassByQualifiedCandidates(classLoader, "externLink.intentUtils",
+                ExternLink::looksLikeIntentUtils);
+        if (IntentUtils == null) {
+            try {
+                IntentUtils = classLoader.loadClass("com.zhihu.android.app.router.IntentUtils");
+            } catch (ClassNotFoundException e) {
+                IntentUtils = classLoader.loadClass("com.zhihu.android.app.router.c");
+            }
+        }
+        openUrl2 = findOpenUrlMethod(IntentUtils);
+        if (openUrl2 == null) {
+            openUrl2 = IntentUtils.getMethod("openUrl", Context.class, Uri.class, boolean.class, boolean.class);
+        }
+
+        H5Event_params = TargetResolver.findFieldByCandidates(H5Event, "externLink.h5Params",
+                field -> org.json.JSONObject.class.isAssignableFrom(field.getType()));
+        if (H5Event_params == null) {
+            H5Event_params = H5Event.getDeclaredField("i");
+            H5Event_params.setAccessible(true);
+        }
+    }
+
+    private static boolean looksLikeH5Event(Class<?> clazz) {
+        for (Field field : clazz.getDeclaredFields()) {
+            if (org.json.JSONObject.class.isAssignableFrom(field.getType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** IntentUtils 的形状：有一个 (Context, Uri, boolean, boolean) 的静态方法，不管它叫什么。 */
+    private static boolean looksLikeIntentUtils(Class<?> clazz) {
+        return findOpenUrlMethod(clazz) != null;
+    }
+
+    private static Method findOpenUrlMethod(Class<?> clazz) {
+        for (Method method : clazz.getMethods()) {
+            if (java.lang.reflect.Modifier.isStatic(method.getModifiers())
+                    && method.getReturnType() == void.class
+                    && Arrays.equals(method.getParameterTypes(),
+                    new Class<?>[]{Context.class, Uri.class, boolean.class, boolean.class})) {
+                return method;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -167,3 +215,4 @@ public class ExternLink implements IHook {
         }
     }
 }
+

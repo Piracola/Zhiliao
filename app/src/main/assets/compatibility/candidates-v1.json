@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "revision": 9,
+  "symbols": {
+    "autoRefresh.returnTopOrRefresh": ["returnTopOrRefresh", "a"],
+    "autoRefresh.postRefreshSucceed": ["postRefreshSucceed"],
+    "autoRefresh.feedCacheWriter": [
+      "com.zhihu.android.app.feed.ui2.feed.q0.x",
+      "com.zhihu.android.app.feed.ui2.feed.b.b",
+      "com.zhihu.android.app.feed.ui2.feed.o0.x"
+    ],
+    "article.contentMixAdapter": [
+      "com.zhihu.android.mix.adapter.a",
+      "com.zhihu.android.mix.adapter.ContentMixAdapter",
+      "com.zhihu.android.mix.a.a",
+      "com.zhihu.android.mix.b.a"
+    ],
+    "feedAd.feedAdvert": [
+      "com.zhihu.android.api.model.FeedAdvert",
+      "com.zhihu.android.adbase.model.FeedAdvert"
+    ],
+    "answerListAd.model": [
+      "com.zhihu.android.api.model.AnswerListAd",
+      "com.zhihu.android.adbase.model.AnswerListAd"
+    ],
+    "answerAd.appView": [
+      "com.zhihu.android.answer.module.content.appview.AnswerAppView",
+      "com.zhihu.android.answer.module.content.appview.AnswerAppViewV2"
+    ],
+    "commentAd.model": [
+      "com.zhihu.android.api.model.CommentListAd",
+      "com.zhihu.android.adbase.model.CommentListAd"
+    ],
+    "commentAd.viewHolder": [
+      "com.zhihu.android.comment.holder.CommentDynamicAdViewHolderV70",
+      "com.zhihu.android.comment.holder.CommentDynamicAdViewHolderV71",
+      "com.zhihu.android.comment.holder.CommentDynamicAdViewHolderV69"
+    ],
+    "externLink.h5Event": [
+      "com.zhihu.android.app.mercury.api.a",
+      "com.zhihu.android.app.mercury.a.a",
+      "com.zhihu.android.app.mercury.api.H5Event"
+    ],
+    "externLink.h5Params": ["i", "j", "k", "h", "n"],
+    "externLink.openUrlMethod": ["openUrl", "a", "b"],
+    "externLink.intentUtils": [
+      "com.zhihu.android.app.router.IntentUtils",
+      "com.zhihu.android.app.router.c",
+      "com.zhihu.android.app.router.b"
+    ],
+    "navRes.bottomNav": [
+      "com.zhihu.android.bottomnav.a",
+      "com.zhihu.android.bottomnav.b",
+      "com.zhihu.android.bottomnav.e"
+    ],
+    "searchAd.converters": [
+      "com.zhihu.android.net.b.b",
+      "com.zhihu.android.net.c.b",
+      "com.zhihu.android.net.d.b",
+      "com.zhihu.android.c3.f.c",
+      "com.zhihu.android.e3.f.b",
+      "retrofit2.b.a.c",
+      "retrofit2.p.a.c",
+      "j.b.a.c"
+    ]
+  }
+}
+

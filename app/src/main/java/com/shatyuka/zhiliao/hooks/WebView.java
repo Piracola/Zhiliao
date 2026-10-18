@@ -36,9 +36,6 @@ public class WebView implements IHook {
             "    else document.addEventListener('DOMContentLoaded', observe);\n" +
             "})();";
 
-    /**
-     * todo: 抽成文件
-     */
     static final String script_hide_subscribe = "let toolbar = document.getElementsByClassName('Toolbar-functionButtons')[0];\n" +
             "if (toolbar) {\n" +
             "    let subscribe = toolbar.lastChild;\n" +
@@ -147,7 +144,6 @@ public class WebView implements IHook {
         try {
             ((android.webkit.WebView) webview).evaluateJavascript(script, null);
         } catch (Throwable e) {
-            // 页面销毁等情况下注入失败, 由后续回调兜底, 但必须留痕, 否则水印去除会静默失效
             XposedBridge.log("[Zhiliao] 注入水印去除脚本失败: " + e);
         }
     }
@@ -155,7 +151,6 @@ public class WebView implements IHook {
     static String getScript(boolean hideWaterMark, boolean hideSubscribe) {
         StringBuilder sb = new StringBuilder();
         if (hideWaterMark) {
-            // 水印脚本自带全局标记与 DOM 兜底, 可重复注入
             sb.append(script_hide_water_mark);
             sb.append("\n");
         }

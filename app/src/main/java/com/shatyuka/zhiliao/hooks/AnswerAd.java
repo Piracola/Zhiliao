@@ -23,7 +23,14 @@ public class AnswerAd implements IHook {
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
         Helper.requireTarget(Helper.IZhihuWebView, "com.zhihu.android.app.mercury.api.IZhihuWebView");
-        Class<?> AppView = classLoader.loadClass("com.zhihu.android.answer.module.content.appview.AnswerAppView").getSuperclass();
+        // 真正要挂的是所有 AppView 子类，AnswerAppView 只是拿到这个父类的入口；
+        // 入口类本身也会改名，所以先过名单，落空再用老名字
+        Class<?> AnswerAppView = TargetResolver.findClassByQualifiedCandidates(classLoader, "answerAd.appView",
+                clazz -> clazz.getSuperclass() != null && clazz.getSuperclass() != Object.class);
+        if (AnswerAppView == null) {
+            AnswerAppView = classLoader.loadClass("com.zhihu.android.answer.module.content.appview.AnswerAppView");
+        }
+        Class<?> AppView = AnswerAppView.getSuperclass();
         if (AppView == null)
             throw new ClassNotFoundException("com.zhihu.android.appview.AppView");
         Helper.findClass(classLoader, AppView.getName() + "$", 0, 32,
@@ -64,7 +71,6 @@ public class AnswerAd implements IHook {
                 }
             }
 
-            @SuppressWarnings("ResultOfMethodCallIgnored")
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
                 if (!Helper.prefs.getBoolean("switch_mainswitch", false))
@@ -79,13 +85,14 @@ public class AnswerAd implements IHook {
                         if (response == null || response.getData() == null)
                             return;
                         try {
-                            int available = response.getData().available();
-                            if (available == 0) {
-                                available = 0x100000;
+                            java.io.InputStream in = response.getData();
+                            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                            byte[] chunk = new byte[8192];
+                            int read;
+                            while ((read = in.read(chunk)) != -1) {
+                                buffer.write(chunk, 0, read);
                             }
-                            byte[] data = new byte[available];
-                            response.getData().read(data);
-                            String content = new String(data);
+                            String content = new String(buffer.toByteArray());
                             content = content.replace("\"searchWords\"", "\"searchWords_bak\"");
                             content = content.replace("\"search_words\"", "\"search_words_bak\"");
                             response.setData(new ByteArrayInputStream(content.getBytes()));

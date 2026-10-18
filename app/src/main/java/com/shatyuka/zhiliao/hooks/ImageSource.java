@@ -80,7 +80,6 @@ public class ImageSource implements IHook {
                     if (param.args == null || param.args.length == 0 || param.args[0] == null)
                         return;
                     String original = firstUrl(ZRichImageBean_originalUrls.get(param.args[0]));
-                    // original_urls 缺失时保持原逻辑，避免图裂
                     if (original != null)
                         param.setResult(original);
                 }

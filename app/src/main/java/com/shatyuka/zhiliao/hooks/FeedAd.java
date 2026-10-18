@@ -31,16 +31,27 @@ public class FeedAd implements IHook {
     public void init(ClassLoader classLoader) throws Throwable {
         Helper.requireTarget(Helper.MorphAdHelper, "com.zhihu.android.morph.ad.utils.MorphAdHelper");
         BasePagingFragment = classLoader.loadClass("com.zhihu.android.app.ui.fragment.paging.BasePagingFragment");
-        try {
-            FeedAdvert = classLoader.loadClass("com.zhihu.android.api.model.FeedAdvert");
-            ListAd = classLoader.loadClass("com.zhihu.android.api.model.ListAd");
-            Advert = classLoader.loadClass("com.zhihu.android.api.model.Advert");
-            Ad = classLoader.loadClass("com.zhihu.android.api.model.Ad");
-        } catch (ClassNotFoundException e) {
-            FeedAdvert = classLoader.loadClass("com.zhihu.android.adbase.model.FeedAdvert");
-            ListAd = classLoader.loadClass("com.zhihu.android.adbase.model.ListAd");
-            Advert = classLoader.loadClass("com.zhihu.android.adbase.model.Advert");
-            Ad = classLoader.loadClass("com.zhihu.android.adbase.model.Ad");
+        // 广告模型的包名渠道间不同（api.model / adbase.model），由候选名单给顺序，
+        // 命中一个就按同包补齐另外三个——同一份渠道包里这四个类总在同一个包
+        FeedAdvert = TargetResolver.findClassByQualifiedCandidates(classLoader, "feedAd.feedAdvert",
+                FeedAd::looksLikeAdModel);
+        if (FeedAdvert != null) {
+            String pkg = FeedAdvert.getPackage().getName();
+            ListAd = classLoader.loadClass(pkg + ".ListAd");
+            Advert = classLoader.loadClass(pkg + ".Advert");
+            Ad = classLoader.loadClass(pkg + ".Ad");
+        } else {
+            try {
+                FeedAdvert = classLoader.loadClass("com.zhihu.android.api.model.FeedAdvert");
+                ListAd = classLoader.loadClass("com.zhihu.android.api.model.ListAd");
+                Advert = classLoader.loadClass("com.zhihu.android.api.model.Advert");
+                Ad = classLoader.loadClass("com.zhihu.android.api.model.Ad");
+            } catch (ClassNotFoundException e) {
+                FeedAdvert = classLoader.loadClass("com.zhihu.android.adbase.model.FeedAdvert");
+                ListAd = classLoader.loadClass("com.zhihu.android.adbase.model.ListAd");
+                Advert = classLoader.loadClass("com.zhihu.android.adbase.model.Advert");
+                Ad = classLoader.loadClass("com.zhihu.android.adbase.model.Ad");
+            }
         }
 
         FeedList_data = classLoader.loadClass("com.zhihu.android.api.model.FeedList").getField("data");
@@ -48,6 +59,13 @@ public class FeedAd implements IHook {
                 method -> method.getReturnType() == boolean.class
                         && Arrays.equals(method.getParameterTypes(),
                         new Class<?>[]{Context.class, FeedAdvert, boolean.class, Boolean.class}));
+    }
+
+    /** 广告模型的结构特征：公开、非抽象、类名对得上。 */
+    private static boolean looksLikeAdModel(Class<?> clazz) {
+        return "FeedAdvert".equals(clazz.getSimpleName())
+                && java.lang.reflect.Modifier.isPublic(clazz.getModifiers())
+                && !java.lang.reflect.Modifier.isAbstract(clazz.getModifiers());
     }
 
     @Override

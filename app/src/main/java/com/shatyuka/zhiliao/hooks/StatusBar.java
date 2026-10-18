@@ -82,16 +82,8 @@ public class StatusBar implements IHook {
         XposedHelpers.findAndHookConstructor(ThemeChangedEvent, int.class, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                if (Helper.prefs.getBoolean("switch_mainswitch", false) && Helper.prefs.getBoolean("switch_statusbar", false)) {
-                    if (Helper.settingsView != null) {
-                        Object background = ((View) Helper.settingsView).getBackground();
-                        if (CombinedDrawable.isInstance(background)) {
-                            Object statusBarDrawable = CombinedDrawable_statusBarDrawable.get(background);
-                            if (StatusBarDrawable.isInstance(statusBarDrawable))
-                                setColor.invoke(statusBarDrawable, 0);
-                        }
-                    }
-                }
+                // 知乎内设置页已移除（设置搬进独立 App）；AnswerPagerFragment 的取色
+                // 路径在 onViewCreated 钩子里已经覆盖，主题切换无需额外处理。
             }
         });
     }

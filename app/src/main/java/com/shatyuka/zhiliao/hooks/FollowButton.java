@@ -10,10 +10,6 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Optional;
 
-/**
- * 卡片视图去除关注按钮
- * todo: 整合web去除关注
- */
 public class FollowButton implements IHook {
     static Class<?> followWithAvatarView;
     static Class<?> bottomReactionView;
@@ -50,7 +46,6 @@ public class FollowButton implements IHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     if (Helper.prefs.getBoolean("switch_mainswitch", false) && Helper.prefs.getBoolean("switch_subscribe", false)) {
-                        // 去除底部关注(带头像)
                         FrameLayout followWithAvatarViewInstance = (FrameLayout) followWithAvatarViewField.get(param.thisObject);
                         if (followWithAvatarViewInstance != null) {
                             followWithAvatarViewInstance.setVisibility(View.GONE);
@@ -65,7 +60,6 @@ public class FollowButton implements IHook {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                     if (Helper.prefs.getBoolean("switch_mainswitch", false) && Helper.prefs.getBoolean("switch_subscribe", false)) {
-                        // 去除顶部关注
                         ViewGroup followPeopleButtonFieldInstance = (ViewGroup) followPeopleButtonField.get(param.thisObject);
                         if (followPeopleButtonFieldInstance != null) {
                             followPeopleButtonFieldInstance.setVisibility(View.GONE);

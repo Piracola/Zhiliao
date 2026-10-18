@@ -1,8 +1,9 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
 android {
     namespace = 'com.shatyuka.zhiliao'
-    compileSdk 36
+    compileSdk = 37
     defaultConfig {
         applicationId "com.shatyuka.zhiliao"
         minSdk 26
@@ -59,15 +60,20 @@ android {
             }
         }
     }
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version = "3.22.1+"
+    // CI 巡检只在 JVM 里跑兼容性单测，不需要 NDK：-PskipNativeBuild 时干脆不配 CMake，
+    // 省掉整条 native 依赖链（NDK/CMake 下载、Dobby 子模块）
+    if (!project.hasProperty('skipNativeBuild')) {
+        externalNativeBuild {
+            cmake {
+                path "src/main/cpp/CMakeLists.txt"
+                version = "3.22.1+"
+            }
         }
     }
     buildFeatures {
         prefab = true
         resValues = true
+        compose = true
     }
     packaging {
         jniLibs {
@@ -76,13 +82,17 @@ android {
         }
         resources {
             // META-INF/xposed/** declares the module to the framework, only strip dependency metadata
-            excludes += ['META-INF/*.version', 'META-INF/*.kotlin_module', 'META-INF/LICENSE*', 'META-INF/NOTICE*', 'kotlin/**', 'google/**', '**.bin']
+            excludes += ['META-INF/*.version', 'META-INF/*.kotlin_module', 'META-INF/LICENSE*', 'META-INF/NOTICE*', 'kotlin/**', 'google/**', '**.bin', 'META-INF/{AL2.0,LGPL2.1}', 'META-INF/INDEX.LIST']
         }
     }
     tasks.withType(JavaCompile).tap {
         configureEach {
             options.compilerArgs << "-Xlint:-options"
         }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
@@ -98,6 +108,20 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'dev.rikka.ndk.thirdparty:cxx:1.2.0'
     testImplementation 'junit:junit:4.13.2'
+    // android.jar 里的 org.json 是抛 Stub! 的桩，JVM 单测用真实现
+    testImplementation 'org.json:json:20250517'
     compileOnly 'io.github.libxposed:api:102.0.0'
     testImplementation 'io.github.libxposed:api:102.0.0'
+    // 独立设置 App（miuix + Compose）。业务 Hook 代码保持 Java；界面层专用的依赖都收在这里。
+    implementation 'io.github.libxposed:service:102.0.0'
+    // 反追踪：服务端把二维码内容缩成 s.zhihu.com 短链，只能本地编码
+    implementation 'com.google.zxing:core:3.5.3'
+    implementation platform('androidx.compose:compose-bom:2026.06.00')
+    implementation 'androidx.activity:activity-compose:1.13.0'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'top.yukonga.miuix.kmp:miuix-android:0.8.8'
+    // DexKit：候选名单和结构特征都找不到时的最后一级兜底（原生扫描 dex，按字符串/签名定位）
+    implementation 'org.luckypray:dexkit:2.3.0'
 }

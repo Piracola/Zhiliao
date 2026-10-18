@@ -72,7 +72,6 @@ public class Watermark implements IHook {
         if (WatermarkInfo_getWatermarked != null)
             XposedBridge.hookMethod(WatermarkInfo_getWatermarked, XC_MethodReplacement.returnConstant(false));
 
-        // TDataWaterMark 可变，直接吞掉写入即可，无需依赖 getter 的实现细节
         if (TDataWaterMark_setLogoImage != null)
             XposedBridge.hookMethod(TDataWaterMark_setLogoImage, XC_MethodReplacement.returnConstant(null));
         if (TDataWaterMark_setNickImage != null)

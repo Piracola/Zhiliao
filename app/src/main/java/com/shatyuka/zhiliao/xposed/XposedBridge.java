@@ -2,6 +2,8 @@ package com.shatyuka.zhiliao.xposed;
 
 import android.util.Log;
 
+import com.shatyuka.zhiliao.SelfCheck;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Member;
@@ -21,8 +23,9 @@ public final class XposedBridge {
     private static XposedInterface framework;
 
     private static final java.util.concurrent.atomic.AtomicInteger hookCount = new java.util.concurrent.atomic.AtomicInteger();
-    private static final Set<String> traced = java.util.concurrent.ConcurrentHashMap.newKeySet();
-    private static volatile boolean traceEnabled;
+
+    /** 当前正在安装 Hook 的功能名；安装时被截取进 lambda，运行期不再依赖它。 */
+    private static volatile String currentFeature;
 
     private XposedBridge() {
     }
@@ -31,17 +34,13 @@ public final class XposedBridge {
         framework = xposedInterface;
     }
 
-    /** Hooks successfully handed to the framework; read by the start-up self check. */
     public static int getHookCount() {
         return hookCount.get();
     }
 
-    /**
-     * Logs one line per hooked target the first time it is invoked.
-     * Enabled by the "switch_hooktrace" debug setting; restart Zhihu after changing it.
-     */
-    public static void setTraceEnabled(boolean enabled) {
-        traceEnabled = enabled;
+    /** 由 Hooks 依次设置，让每条 Hook 归到自己功能名下，日志才读得懂。 */
+    public static void setCurrentFeature(String feature) {
+        currentFeature = feature;
     }
 
     public static void log(String text) {
@@ -60,10 +59,17 @@ public final class XposedBridge {
             throw new IllegalArgumentException("Only methods and constructors can be hooked: " + hookMethod);
         if (framework == null)
             throw new IllegalStateException("XposedBridge is not attached to the framework");
+        final String feature = currentFeature;
+        final String target = signatureOf(hookMethod);
+        SelfCheck.installed(feature, target);
         XposedInterface.HookHandle handle = framework.hook((Executable) hookMethod)
-                .intercept(chain -> intercept(callback, chain));
+                .intercept(chain -> intercept(callback, chain, feature, target));
         hookCount.incrementAndGet();
         return new XC_MethodHook.Unhook(hookMethod, handle);
+    }
+
+    private static String signatureOf(Member member) {
+        return member.getDeclaringClass().getName() + "#" + member.getName();
     }
 
     public static Set<XC_MethodHook.Unhook> hookAllMethods(Class<?> hookClass, String methodName, XC_MethodHook callback) {
@@ -93,13 +99,13 @@ public final class XposedBridge {
         }
     }
 
-    private static Object intercept(XC_MethodHook callback, XposedInterface.Chain chain) throws Throwable {
+    private static Object intercept(XC_MethodHook callback, XposedInterface.Chain chain,
+                                    String feature, String target) throws Throwable {
         XC_MethodHook.MethodHookParam param = new XC_MethodHook.MethodHookParam(
                 chain.getExecutable(), chain.getThisObject(), chain.getArgs().toArray());
-        if (traceEnabled) {
-            String signature = chain.getExecutable().getDeclaringClass().getName() + "#" + chain.getExecutable().getName();
-            if (traced.add(signature))
-                log("[自检][触发] " + signature);
+        if (SelfCheck.fire(feature, target)) {
+            // 每个目标只记第一条：这是"确实拦到了"的证据，也是"装了却没进这里"的对照
+            log("[自检][命中] " + (feature == null ? "" : feature + " ") + target);
         }
 
         try {

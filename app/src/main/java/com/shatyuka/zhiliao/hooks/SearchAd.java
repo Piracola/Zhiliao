@@ -1,6 +1,7 @@
 package com.shatyuka.zhiliao.hooks;
 
 import com.shatyuka.zhiliao.Helper;
+import com.shatyuka.zhiliao.TargetResolver;
 import com.shatyuka.zhiliao.xposed.XC_MethodHook;
 import com.shatyuka.zhiliao.xposed.XposedBridge;
 import java.lang.reflect.Field;
@@ -10,6 +11,18 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class SearchAd implements IHook {
+    /** 名单全落空时的兜底顺序（历史上各版本出现过的转换器类名）。 */
+    private static final String[] LEGACY_CONVERTERS = {
+            "com.zhihu.android.net.b.b",
+            "com.zhihu.android.net.c.b",
+            "com.zhihu.android.net.d.b",
+            "com.zhihu.android.c3.f.c",
+            "com.zhihu.android.e3.f.b",
+            "retrofit2.b.a.c",
+            "retrofit2.p.a.c",
+            "j.b.a.c"
+    };
+
     static LinkedList<Method> converts = new LinkedList<>();
 
     static Field SearchTopTabsItemList_commercialData;
@@ -26,22 +39,21 @@ public class SearchAd implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
-        String[] classNames = {
-                "com.zhihu.android.net.b.b",
-                "com.zhihu.android.net.c.b",
-                "com.zhihu.android.net.d.b",
-                "com.zhihu.android.c3.f.c",
-                "com.zhihu.android.e3.f.b",
-                "retrofit2.b.a.c",
-                "retrofit2.p.a.c",
-                "j.b.a.c"
-        };
-        Class<?> JacksonResponseBodyConverter;
-        for (String className : classNames) {
+        // 转换器类随渠道包改名：顺序交给候选名单，命中几个挂几个
+        for (Class<?> converter : TargetResolver.findClassesByQualifiedCandidates(
+                classLoader, "searchAd.converters", SearchAd::looksLikeConverter)) {
             try {
-                JacksonResponseBodyConverter = classLoader.loadClass(className);
-                converts.add(JacksonResponseBodyConverter.getMethod("convert", Object.class));
-            } catch (ClassNotFoundException | NoSuchMethodException ignored) {
+                converts.add(converter.getMethod("convert", Object.class));
+            } catch (NoSuchMethodException ignored) {
+            }
+        }
+        if (converts.isEmpty()) {
+            for (String className : LEGACY_CONVERTERS) {
+                try {
+                    Class<?> converter = classLoader.loadClass(className);
+                    converts.add(converter.getMethod("convert", Object.class));
+                } catch (ClassNotFoundException | NoSuchMethodException ignored) {
+                }
             }
         }
         if (converts.isEmpty()) {
@@ -80,6 +92,15 @@ public class SearchAd implements IHook {
             Class<?> HotSearchBean = classLoader.loadClass("com.zhihu.android.api.model.HotSearchBean");
             HotSearchBean_searchHotList = HotSearchBean.getField("searchHotList");
         } catch (ClassNotFoundException | NoSuchFieldException ignored) {
+        }
+    }
+
+    /** 转换器的结构特征：有一个 convert(Object) 返回 Object。 */
+    private static boolean looksLikeConverter(Class<?> clazz) {
+        try {
+            return clazz.getMethod("convert", Object.class).getReturnType() == Object.class;
+        } catch (Throwable e) {
+            return false;
         }
     }
 

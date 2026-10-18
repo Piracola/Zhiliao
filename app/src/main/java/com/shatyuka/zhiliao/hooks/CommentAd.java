@@ -26,13 +26,10 @@ public class CommentAd implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
-        try {
-            CommentListAd = classLoader.loadClass("com.zhihu.android.api.model.CommentListAd");
-        } catch (ClassNotFoundException e) {
-            try {
-                CommentListAd = classLoader.loadClass("com.zhihu.android.adbase.model.CommentListAd");
-            } catch (ClassNotFoundException ignored) {
-            }
+        CommentListAd = TargetResolver.findClassByQualifiedCandidates(
+                classLoader, "commentAd.model", CommentAd::looksLikeCommentListAd);
+        if (CommentListAd == null) {
+            CommentListAd = loadLegacyModel(classLoader);
         }
         if (CommentListAd == null)
             return;
@@ -48,9 +45,13 @@ public class CommentAd implements IHook {
         if (resolveCommentAdParam == null) {
             Class<?> holder;
             try {
-                holder = classLoader.loadClass("com.zhihu.android.comment.holder.CommentDynamicAdViewHolderV70");
                 ViewHolder = classLoader.loadClass("androidx.recyclerview.widget.RecyclerView$ViewHolder");
                 itemView = ViewHolder.getField("itemView");
+                holder = TargetResolver.findClassByQualifiedCandidates(
+                        classLoader, "commentAd.viewHolder", clazz -> looksLikeAdViewHolder(clazz, ViewHolder));
+                if (holder == null) {
+                    holder = classLoader.loadClass("com.zhihu.android.comment.holder.CommentDynamicAdViewHolderV70");
+                }
             } catch (ClassNotFoundException | NoSuchFieldException ignored) {
                 ViewHolder = null;
                 itemView = null;
@@ -58,6 +59,46 @@ public class CommentAd implements IHook {
             }
             bindCommentAd = findBindMethod(holder);
         }
+    }
+
+    /** 广告模型的形状：公开、具体类。名字对不上时，结构上也只有这些可依。 */
+    private static boolean looksLikeCommentListAd(Class<?> clazz) {
+        try {
+            int modifiers = clazz.getModifiers();
+            return Modifier.isPublic(modifiers) && !Modifier.isAbstract(modifiers);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    /** 广告 ViewHolder 的形状：是 RecyclerView.ViewHolder 子类，且有一个吃 CommentListAd 的静态 void 方法。 */
+    private static boolean looksLikeAdViewHolder(Class<?> clazz, Class<?> viewHolderBase) {
+        try {
+            if (clazz == viewHolderBase || !viewHolderBase.isAssignableFrom(clazz)) {
+                return false;
+            }
+            for (Method method : clazz.getDeclaredMethods()) {
+                if (Modifier.isStatic(method.getModifiers()) && method.getReturnType() == void.class
+                        && !method.isBridge() && !method.isSynthetic()
+                        && Arrays.equals(method.getParameterTypes(), new Class<?>[]{CommentListAd})) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private static Class<?> loadLegacyModel(ClassLoader classLoader) {
+        for (String name : new String[]{"com.zhihu.android.api.model.CommentListAd",
+                "com.zhihu.android.adbase.model.CommentListAd"}) {
+            try {
+                return classLoader.loadClass(name);
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
     }
 
     private static Method findBindMethod(Class<?> holder) {

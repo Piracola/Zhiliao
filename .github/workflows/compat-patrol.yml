@@ -1,0 +1,135 @@
+name: 兼容性巡检
+
+# 每天跑一次：拿官方渠道的新包 → 校验是不是官方的、什么版本 → 生成审计 JAR → 跑兼容性单测。
+# 知乎一改混淆名，这里就会红，比等用户反馈早得多。
+#
+# 开箱即用，不需要配任何变量：
+#   - 下载地址问知乎官网入口要，永远是最新的包；
+#   - 信任的签名证书指纹在 tools/zhihu-trusted-certs.txt 里，是公开信息，随仓库走。
+# 可选变量（都不填也能跑）：
+#   ZHIHU_APK_URL          手动指定下载地址（镜像站、回放旧版本）
+#   ZHIHU_APK_CHANNEL      下载渠道，默认 zhihuwap64（arm64）
+#   ZHIHU_CERT_SHA256      临时覆盖受信证书
+#   ZHIHU_MIN_VERSION_CODE 低于这个 versionCode 判失败，防镜像回退旧包
+
+on:
+  schedule:
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  patrol:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 解析最新的官方安装包
+        shell: pwsh
+        env:
+          OVERRIDE_URL: ${{ vars.ZHIHU_APK_URL }}
+          CHANNEL: ${{ vars.ZHIHU_APK_CHANNEL }}
+        run: |
+          # 默认走知乎自己的下载入口，它会 302 到当前最新包，所以日常不需要配任何地址。
+          # 配了 ZHIHU_APK_URL 就当覆盖（镜像站、指定版本回放用）。
+          if (-not [string]::IsNullOrWhiteSpace($env:OVERRIDE_URL)) {
+            Write-Host "使用仓库变量指定的地址：$env:OVERRIDE_URL"
+            curl.exe -L --fail --retry 3 --retry-delay 5 --max-time 3600 -o zhihu.apk $env:OVERRIDE_URL
+            if ($LASTEXITCODE -ne 0) { throw "下载失败（curl 退出码 $LASTEXITCODE）" }
+          } else {
+            $channel = if ([string]::IsNullOrWhiteSpace($env:CHANNEL)) { 'zhihuwap64' } else { $env:CHANNEL }
+            ./tools/resolve-zhihu-apk.ps1 -Channel $channel -OutFile zhihu.apk
+          }
+
+      - name: 校验包名、版本与签名证书
+        shell: pwsh
+        env:
+          CERT_OVERRIDE: ${{ vars.ZHIHU_CERT_SHA256 }}
+          MIN_CODE: ${{ vars.ZHIHU_MIN_VERSION_CODE }}
+        run: |
+          # 信任的证书指纹写在 tools/zhihu-trusted-certs.txt 里，属于公开信息，不用配变量。
+          # ZHIHU_CERT_SHA256 只是临时覆盖（比如你自己拿某个渠道包做实验）。
+          $args = @('-ApkPath', 'zhihu.apk')
+          if (-not [string]::IsNullOrWhiteSpace($env:CERT_OVERRIDE)) {
+            $args += @('-AllowedCertSha256', $env:CERT_OVERRIDE)
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:MIN_CODE)) {
+            $args += @('-MinVersionCode', $env:MIN_CODE)
+          }
+          ./tools/verify-zhihu-apk.ps1 @args
+
+      - name: 生成审计 JAR
+        shell: pwsh
+        run: ./tools/prepare-target.ps1 -ApkPath zhihu.apk -SkipDecompile
+
+      - name: 兼容性单测
+        shell: pwsh
+        env:
+          ZHILIAO_TEST_DIR: ${{ github.workspace }}\targetapp\jars
+        run: ./gradlew.bat testDebugUnitTest -PskipNativeBuild --console=plain
+
+      - name: 归档结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-patrol-${{ github.run_number }}
+          path: |
+            zhihu-apk-info.json
+            app/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: 失败开 issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const title = '兼容性巡检失败：知乎新包可能改了混淆名';
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'compat-patrol',
+            });
+            if (open.some(issue => issue.title === title)) {
+              core.info('已有未关闭的巡检 issue，跳过创建');
+              return;
+            }
+            let info = '';
+            try {
+              info = fs.readFileSync('zhihu-apk-info.json', 'utf8');
+            } catch (e) {
+              info = '（没读到 zhihu-apk-info.json，容器可能在下载或校验阶段就失败了）';
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              labels: ['compat-patrol'],
+              body: [
+                '巡检失败了，点上面这次 Run 的日志看具体是哪一步。',
+                '',
+                '常见原因：',
+                '1. 知乎改了某个 Hook 的目标类/方法名 —— 按日志里的 `[兼容性]` 行定位，补候选名单；',
+                '2. 官方换了签名证书 —— 确认无误后更新仓库变量 `ZHIHU_CERT_SHA256`；',
+                '3. 下载链接失效 —— 更新 `ZHIHU_APK_URL`。',
+                '',
+                '```json',
+                info.trim(),
+                '```',
+              ].join('\n'),
+            });
+
+
+

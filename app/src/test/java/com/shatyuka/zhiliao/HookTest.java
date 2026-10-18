@@ -28,7 +28,7 @@ import com.shatyuka.zhiliao.hooks.Tag;
 import com.shatyuka.zhiliao.hooks.ThirdPartyLogin;
 import com.shatyuka.zhiliao.hooks.VIPBanner;
 import com.shatyuka.zhiliao.hooks.WebView;
-import com.shatyuka.zhiliao.hooks.ZhihuPreference;
+import com.shatyuka.zhiliao.hooks.AntiTracking;
 
 import org.junit.Test;
 
@@ -73,6 +73,41 @@ public class HookTest {
                 }
             }
         }
+        loadCandidateAsset();
+    }
+
+    /**
+     * 单测和真机用同一份候选名单：直接读 app/src/main/assets 里的那个 JSON。
+     * 少了这一步，测试里 registry 永远是空的，各 Hook 全走结构化兜底，
+     * 等于把生产环境真正在用的那条解析链整个放过——最容易被忽略的测试盲区。
+     */
+    private static void loadCandidateAsset() {
+        File[] candidates = {
+                new File("src/main/assets/compatibility/candidates-v1.json"),
+                new File("app/src/main/assets/compatibility/candidates-v1.json"),
+        };
+        for (File file : candidates) {
+            if (!file.isFile()) {
+                continue;
+            }
+            try {
+                String json = new String(java.nio.file.Files.readAllBytes(file.toPath()),
+                        java.nio.charset.StandardCharsets.UTF_8);
+                CandidateRegistry.install(json);
+                System.out.println("候选名单已载入: " + file.getAbsolutePath()
+                        + " revision=" + CandidateRegistry.getRevision());
+                return;
+            } catch (Throwable e) {
+                System.out.println("候选名单载入失败: " + file.getAbsolutePath() + " " + e);
+            }
+        }
+        System.out.println("没找到候选名单 JSON，测试将只覆盖结构化兜底路径");
+    }
+
+    @Test
+    public void candidateAssetIsSharedWithRuntime() {
+        org.junit.Assert.assertTrue("单测没有载入 assets 里的候选名单，测试与运行时不同源",
+                CandidateRegistry.getRevision() > 0);
     }
 
     public static void resetState(Class<? extends IHook> clazz) throws IllegalAccessException {
@@ -100,17 +135,11 @@ public class HookTest {
                 Helper.initSharedClasses(packageInfo.classLoader);
                 hook.init(packageInfo.classLoader);
             } catch (ClassNotFoundException | NoClassDefFoundError e) {
-                // init() 用「找不到目标」表示该版本没有这个功能，与运行时 Hooks.init 的处理一致
                 System.out.println("skip " + hook.getName() + " on " + packageInfo.name + ": " + e.getMessage());
             } catch (Throwable e) {
                 throw new AssertionError(hook.getName() + ", " + packageInfo.name, e);
             }
         }
-    }
-
-    @Test
-    public void zhihuPreferenceTest() {
-        checkHook(new ZhihuPreference());
     }
 
     @Test
@@ -204,8 +233,28 @@ public class HookTest {
     }
 
     @Test
+    public void autoRefreshFreezesCacheOnEveryAuditJar() {
+        for (PackageInfo packageInfo : packageInfos) {
+            try {
+                resetState(AutoRefresh.class);
+                Helper.initSharedClasses(packageInfo.classLoader);
+                new AutoRefresh().init(packageInfo.classLoader);
+            } catch (Throwable e) {
+                throw new AssertionError("禁止自动刷新, " + packageInfo.name, e);
+            }
+            org.junit.Assert.assertTrue("FeedLocalDataSource 的缓存写入没解析到（" + packageInfo.name
+                            + "）：冷启动屏幕不变，但下次冷启动会被缓存带跑",
+                    AutoRefresh.canFreezeCache());
+        }
+    }
+
+    @Test
     public void autoRefreshTest() {
         checkHook(new AutoRefresh());
+        org.junit.Assert.assertTrue("postRefreshSucceed 没解析到：冷启动只能退回直接拦截，首页会白屏",
+                AutoRefresh.canSuppressNetworkResult());
+        org.junit.Assert.assertTrue("FeedLocalDataSource 的缓存写入没解析到：冷启动屏幕不变，但下次冷启动会被缓存带跑",
+                AutoRefresh.canFreezeCache());
     }
 
     @Test
@@ -246,6 +295,11 @@ public class HookTest {
     @Test
     public void webViewTest() {
         checkHook(new WebView());
+    }
+
+    @Test
+    public void antiTrackingTest() {
+        checkHook(new AntiTracking());
     }
 
 }

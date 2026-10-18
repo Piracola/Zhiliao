@@ -227,7 +227,6 @@ public class Tag implements IHook {
             return;
         }
 
-        // 按需创建tag
         RelativeLayout tagLayout;
         TextView tag = viewGroup.findViewById(TAG_ID);
         if (tag == null) {
@@ -245,12 +244,10 @@ public class Tag implements IHook {
             tagLayout = (RelativeLayout) tagParent;
         }
 
-        // 设置tag属性
         tag.setTextColor(-1);
         tag.setText(getType(type));
         tag.setBackground(getBackground(type));
 
-        // 调整X坐标
         int baseX = 0;
         if (title != null && title.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
             baseX = ((ViewGroup.MarginLayoutParams) title.getLayoutParams()).leftMargin;
@@ -264,7 +261,6 @@ public class Tag implements IHook {
 
         boolean hasTitle = title != null && title.getVisibility() == View.VISIBLE;
 
-        // 调整Y坐标
         float baseY = 0;
         if (hasReason) {
             baseY = Helper.scale * 21;
@@ -275,7 +271,6 @@ public class Tag implements IHook {
             tagLayout.setY(baseY);
         }
 
-        // 为tag留出空间
         if (hasTitle) {
             title.setText("　　 " + title.getText());
         } else if (author.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {

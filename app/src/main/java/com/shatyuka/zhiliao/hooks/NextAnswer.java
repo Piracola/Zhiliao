@@ -47,7 +47,6 @@ public class NextAnswer implements IHook {
                 if (initLayout != null)
                     initLayout.setAccessible(true);
 
-                // 11.10.0: 按钮本体是字段 y(类型 PopupMenuNextButton)，旧的 t/f/e/M/L/d 名单只能命中无关的 L
                 nextButton = Helper.findFieldByType(MixShortContainerFragment, PopupMenuNextButton);
             } catch (Throwable e) {
                 XposedBridge.log("[Zhiliao] 移除下一个回答按钮: 旧短容器目标已缺失, 仅处理新短容器: " + e);

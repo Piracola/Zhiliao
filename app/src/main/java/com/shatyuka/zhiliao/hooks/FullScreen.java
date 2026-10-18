@@ -18,8 +18,6 @@ public class FullScreen implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
-        // 11.10.0: 匿名类 ...clearscreen.d$c 已作废，改钩具名 public 方法 enterClearScreen()
-        // 同一语义的 ToolBarView 在多个包各有一套实现，全部拦截（只拦 enter，不碰 exitClearScreen）
         ClearScreenToolBarView_enterClearScreen = findEnterClearScreen(classLoader,
                 "com.zhihu.android.feature.short_container_feature.ui.widget.toolbar.clearscreen.ClearScreenToolBarView");
         UnifyClearScreenToolBarView_enterClearScreen = findEnterClearScreen(classLoader,

@@ -27,7 +27,6 @@ public class VIPBanner implements IHook {
 
     @Override
     public void init(ClassLoader classLoader) throws Throwable {
-        // 11.10.0: 旧类 more.more.widget.VipEntranceView、NewMoreFragment、resetStyle 均已不存在
         // 回退类 premium.view.VipEntranceView 的入口是 public init(Context)，initView(Context) 只是其私有实现
         VipEntranceView = classLoader.loadClass("com.zhihu.android.premium.view.VipEntranceView");
         initView_new = VipEntranceView.getDeclaredMethod("init", Context.class);
