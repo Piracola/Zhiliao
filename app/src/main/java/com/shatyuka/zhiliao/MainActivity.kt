@@ -148,9 +148,9 @@ object Catalog {
             item("switch_fullscreen", "禁止进入全屏模式", "看看时间", R.drawable.ic_fullscreen_exit),
             item("switch_thirdpartylogin", "第三方登录", "解锁全部第三方登录方式", R.drawable.ic_login),
             item("switch_autorefresh", "禁止自动刷新", "禁止首页推荐自动刷新", R.drawable.ic_refresh),
-            item("switch_antitracking", "反追踪", "总开关：阻断埋点上报，并接管下面两项", R.drawable.ic_block),
-            item("switch_antitracking_link", "反链接参数追踪", "复制、分享出去的链接去掉 utm_*、share_code 等追踪参数", R.drawable.ic_unlink, parent = "switch_antitracking"),
-            item("switch_antitracking_qr", "反图片链接追踪", "分享卡片的二维码直接指向内容，不再指向 s.zhihu.com 短链", R.drawable.ic_qr_code, parent = "switch_antitracking"),
+            item("switch_antitracking", "反追踪", "阻断埋点上报", R.drawable.ic_block),
+            item("switch_antitracking_link", "反链接参数追踪", "链接自动去掉追踪参数", R.drawable.ic_unlink, parent = "switch_antitracking"),
+            item("switch_antitracking_qr", "反图片链接追踪", "二维码直达原文", R.drawable.ic_qr_code, parent = "switch_antitracking"),
         )),
         PrefGroup("ui", "界面净化", Accent.Purple, listOf(
             item("switch_reddot", "不显示小红点", "强迫症福音", R.drawable.ic_mark_chat_unread),
