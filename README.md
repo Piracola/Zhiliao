@@ -6,6 +6,11 @@
 [![Chat](https://img.shields.io/badge/Telegram-群-blue.svg?logo=telegram)](https://t.me/joinchat/OibCWxbdCMkJ2fG8J1DpQQ)
 [![License](https://img.shields.io/github/license/Piracola/Zhiliao?label=License)](https://choosealicense.com/licenses/gpl-3.0/)
 
+<p align="center">
+  <img src="docs/screenshots/settings-dark.jpg" width="300" alt="知了设置页（深色）">
+  <img src="docs/screenshots/settings-light.jpg" width="300" alt="知了设置页（浅色）">
+</p>
+
 ## 功能
 
 **广告拦截**
