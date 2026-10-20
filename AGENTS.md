@@ -34,7 +34,7 @@ $env:ZHILIAO_TEST_DIR = (Resolve-Path '.\targetapp\jars').Path; .\gradlew.bat te
 
 ## 当前状态
 
-- 现役 26.10.18；真机已验证：知乎 11.11.1/41108（小米商店包）、11.11.0/41106 小米渠道包与官网包，32/32 Hook 可用、Lucide 图标正常。
+- 现役 26.10.20；真机已验证：知乎 11.11.1/41108（小米商店包）、11.11.0/41106 小米渠道包与官网包，32/32 Hook 可用、Lucide 图标正常。
 - 顶部焦点广告栏与浮层/彩蛋广告是两条独立链路，都不走 `FeedList`：前者由 `ad_card` 模块出视图（拦 `AdCardViewInterfaceImpl#getAdCardView(回调,int)`），后者是「特形广告」`AdEgg`/`AdFloat`（拦父类的 `initData(String)`，注意别挑成同签名的私有 `isImageCached`）。详见 compat-audit §七。
 - 禁止自动刷新按刷新来源名分流：冷启动 `AppStart` 放行整条链路（缓存渲染成上次那一屏），随后在 `postRefreshSucceed` 丢弃网络结果，并在数据层拦截这次网络结果写回推荐缓存——两步一起才叫冻结（只丢 UI 结果的话，磁盘缓存仍会前进一格，下次冷启动就被带跑）。点「首页」`TabClick` 直接拦截；下拉 `Pull` 放行并解除冻结。冷启动不能直接拦截——拦掉刷新等于连缓存渲染一起拦掉，首页整片空白（真机已验证）。
 - 缓存写入按结构定位：`FeedLocalDataSource` 的 `void(FeedList)` + 缓存回调接口 + 无参清缓存 + String 缓存键四个特征，候选名单（官网 11.11 `q0.x`、小米 `b.b`、market 11.10 `o0.x`）优先，落空时 DexKit 按精确签名扫 `com.zhihu.android.app.feed` 兜底；绝不写死渠道包的混淆名。未知刷新来源用 `refreshType` 自己的 boolean 判定，避免新来源被当成主动刷新放行。
