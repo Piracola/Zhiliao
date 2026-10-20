@@ -9,6 +9,7 @@ import com.shatyuka.zhiliao.hooks.CommentAd;
 import com.shatyuka.zhiliao.hooks.CustomFilter;
 import com.shatyuka.zhiliao.hooks.ExternLink;
 import com.shatyuka.zhiliao.hooks.FeedAd;
+import com.shatyuka.zhiliao.hooks.FeedFloatAd;
 import com.shatyuka.zhiliao.hooks.FeedTopHotBanner;
 import com.shatyuka.zhiliao.hooks.FollowButton;
 import com.shatyuka.zhiliao.hooks.FullScreen;
@@ -178,6 +179,27 @@ public class HookTest {
     @Test
     public void feedAdTest() {
         checkHook(new FeedAd());
+    }
+
+    @Test
+    public void feedFloatAdTest() {
+        for (PackageInfo packageInfo : packageInfos) {
+            try {
+                resetState(FeedFloatAd.class);
+                Helper.initSharedClasses(packageInfo.classLoader);
+                new FeedFloatAd().init(packageInfo.classLoader);
+            } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                System.out.println("skip 去浮层广告 on " + packageInfo.name + ": " + e.getMessage());
+                continue;
+            } catch (Throwable e) {
+                throw new AssertionError("去浮层广告, " + packageInfo.name, e);
+            }
+            String name = FeedFloatAd.initDataName();
+            if (name != null) {
+                org.junit.Assert.assertEquals("浮层广告要挂在 initData 上，父类里还有个同签名的私有 isImageCached（"
+                        + packageInfo.name + "）", "initData", name);
+            }
+        }
     }
 
     @Test

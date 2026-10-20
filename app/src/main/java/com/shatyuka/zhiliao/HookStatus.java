@@ -22,6 +22,7 @@ public final class HookStatus {
         FEATURE_KEYS.put("去启动页广告", new String[]{"switch_launchad"});
         FEATURE_KEYS.put("自定义过滤", new String[]{"switch_video", "switch_removearticle", "switch_pin", "switch_marketcard"});
         FEATURE_KEYS.put("去信息流广告", new String[]{"switch_feedad"});
+        FEATURE_KEYS.put("去浮层广告", new String[]{"switch_feedfloatad"});
         FEATURE_KEYS.put("去回答列表广告", new String[]{"switch_answerlistad"});
         FEATURE_KEYS.put("去评论广告", new String[]{"switch_commentad"});
         FEATURE_KEYS.put("去回答底部广告", new String[]{"switch_answerad"});

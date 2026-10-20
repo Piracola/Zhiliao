@@ -21,6 +21,8 @@ public class FeedAd implements IHook {
     static Field FeedList_data;
 
     static Method resolveFeedAdParam;
+    /** ad_card 模块的视图入口：void 方法 + (回调接口, int 卡片类型)。 */
+    static Method adCardView;
 
     @Override
     public String getName() {
@@ -59,6 +61,35 @@ public class FeedAd implements IHook {
                 method -> method.getReturnType() == boolean.class
                         && Arrays.equals(method.getParameterTypes(),
                         new Class<?>[]{Context.class, FeedAdvert, boolean.class, Boolean.class}));
+
+        // 推荐页顶部那条横贯整屏的焦点广告栏不来自信息流数据：feed 找 ad_card 模块要视图，
+        // 拿回来自己塞在列表最前面。所以按条目删广告删不到它，只能在"要视图"这一步拦。
+        // 入口是接口方法 getAdCardView(回调, int cardType)，实现类里同名；参数类型才是稳的锚。
+        adCardView = null;
+        Throwable adCardError = null;
+        try {
+            Class<?> adCardImpl = classLoader.loadClass("com.zhihu.android.ad_card.AdCardViewInterfaceImpl");
+            for (Method method : adCardImpl.getDeclaredMethods()) {
+                Class<?>[] types = method.getParameterTypes();
+                if (method.getReturnType() != void.class || types.length != 2
+                        || types[1] != int.class || !types[0].isInterface()) {
+                    continue;
+                }
+                if ("getAdCardView".equals(method.getName())) {
+                    adCardView = method;
+                    break;
+                }
+                if (adCardView == null) {
+                    adCardView = method;
+                }
+            }
+        } catch (Throwable e) {
+            adCardError = e;
+        }
+        if (adCardView == null) {
+            XposedBridge.log("[Zhiliao][去信息流广告] 没有找到 ad_card 的 getAdCardView(回调,int)，顶部广告栏会漏"
+                    + (adCardError == null ? "" : "：" + adCardError));
+        }
     }
 
     /** 广告模型的结构特征：公开、非抽象、类名对得上。 */
@@ -144,6 +175,23 @@ public class FeedAd implements IHook {
                 }
             }
         });
+        if (adCardView != null) {
+            XposedBridge.hookMethod(adCardView, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!Helper.prefs.getBoolean("switch_mainswitch", false) || !Helper.prefs.getBoolean("switch_feedad", true)) {
+                        return;
+                    }
+                    // 只拦焦点图那一种（FOCUS_VIEW = 1）：话题红包卡走 getAdCardView(String,int) 另一个重载，
+                    // 将来这个重载若也支持别的类型，别顺手一起误伤。
+                    if (!(param.args[1] instanceof Integer) || (Integer) param.args[1] != 1) {
+                        return;
+                    }
+                    // 直接不给视图：feed 拿到 null 就跳过插入（setResult 之后回调也不会被调用）
+                    param.setResult(null);
+                }
+            });
+        }
     }
 
     private static boolean isFeedAdvert(Object item) {

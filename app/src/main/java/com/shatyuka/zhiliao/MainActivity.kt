@@ -125,6 +125,7 @@ object Catalog {
         PrefGroup("ads", "广告", Accent.Orange, listOf(
             item("switch_launchad", "去启动页广告", "去除启动页全屏广告", R.drawable.ic_ad_units),
             item("switch_feedad", "去信息流广告", "去除信息流内夹杂的广告", R.drawable.ic_table_rows),
+            item("switch_feedfloatad", "去浮层广告", "去除首屏、搜索页浮层与首页彩蛋广告", R.drawable.ic_layers),
             item("switch_answerlistad", "去回答列表广告", "去除回答列表内的广告", R.drawable.ic_format_list),
             item("switch_commentad", "去评论广告", "去除评论页面顶部的广告", R.drawable.ic_comment),
             item("switch_sharead", "去分享广告", "去除分享页面顶部的广告", R.drawable.ic_share),

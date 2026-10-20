@@ -14,6 +14,7 @@ import com.shatyuka.zhiliao.hooks.CommentAd;
 import com.shatyuka.zhiliao.hooks.CustomFilter;
 import com.shatyuka.zhiliao.hooks.ExternLink;
 import com.shatyuka.zhiliao.hooks.FeedAd;
+import com.shatyuka.zhiliao.hooks.FeedFloatAd;
 import com.shatyuka.zhiliao.hooks.FeedTopHotBanner;
 import com.shatyuka.zhiliao.hooks.FollowButton;
 import com.shatyuka.zhiliao.hooks.FullScreen;
@@ -73,6 +74,7 @@ public class Hooks {
             new ImageSource(),
             new Watermark(),
             new AntiTracking(),
+            new FeedFloatAd(),
     };
 
     public static void init(final ClassLoader classLoader) {

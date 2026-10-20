@@ -34,6 +34,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: 装 dex2jar（生成审计 JAR 用）
+        shell: pwsh
+        run: |
+          # windows-latest 不自带 dex2jar，prepare-target.ps1 靠 PATH 里的 d2j-dex2jar.bat 找它。
+          $zip = Join-Path $env:RUNNER_TEMP 'dex-tools.zip'
+          $dir = Join-Path $env:RUNNER_TEMP 'dex-tools'
+          curl.exe -L --fail --retry 3 --retry-delay 5 -o $zip 'https://github.com/pxb1988/dex2jar/releases/download/v2.4/dex-tools-v2.4.zip'
+          if ($LASTEXITCODE -ne 0) { throw "下载 dex2jar 失败（curl 退出码 $LASTEXITCODE）" }
+          Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force
+          $bat = Get-ChildItem $dir -Recurse -Filter 'd2j-dex2jar.bat' | Select-Object -First 1
+          if ($null -eq $bat) { throw '解压后没找到 d2j-dex2jar.bat' }
+          $bat.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          Write-Host "dex2jar: $($bat.FullName)"
+
       - name: 解析最新的官方安装包
         shell: pwsh
         env:
@@ -59,17 +73,23 @@ jobs:
         run: |
           # 信任的证书指纹写在 tools/zhihu-trusted-certs.txt 里，属于公开信息，不用配变量。
           # ZHIHU_CERT_SHA256 只是临时覆盖（比如你自己拿某个渠道包做实验）。
-          $args = @('-ApkPath', 'zhihu.apk')
+          # 注意：参数要用哈希表展开。数组展开只会把元素当成位置参数，"-ApkPath" 会被当成值传进去，
+          # 巡检就在这一步一直报"找不到 APK：-ApkPath"。
+          $verify = @{ ApkPath = 'zhihu.apk' }
           if (-not [string]::IsNullOrWhiteSpace($env:CERT_OVERRIDE)) {
-            $args += @('-AllowedCertSha256', $env:CERT_OVERRIDE)
+            $verify.AllowedCertSha256 = @($env:CERT_OVERRIDE)
           }
           if (-not [string]::IsNullOrWhiteSpace($env:MIN_CODE)) {
-            $args += @('-MinVersionCode', $env:MIN_CODE)
+            $verify.MinVersionCode = [int]$env:MIN_CODE
           }
-          ./tools/verify-zhihu-apk.ps1 @args
+          ./tools/verify-zhihu-apk.ps1 @verify
 
       - name: 生成审计 JAR
         shell: pwsh
+        env:
+          # dex2jar 的 d2j_invoke.bat 自己把上限写死成 2GB，163MB 的知乎包必然 OOM。
+          # _JAVA_OPTIONS 是启动器最后应用的，实测能把 -Xmx 顶到 8GB（java -Xmx64m -XX:+PrintFlagsFinal 验证过）。
+          _JAVA_OPTIONS: -Xmx8g
         run: ./tools/prepare-target.ps1 -ApkPath zhihu.apk -SkipDecompile
 
       - name: 兼容性单测
@@ -95,6 +115,10 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            if (!context.payload.repository?.has_issues) {
+              core.info('仓库没开 Issues，跳过建单');
+              return;
+            }
             const title = '兼容性巡检失败：知乎新包可能改了混淆名';
             const { data: open } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,

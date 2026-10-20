@@ -1,6 +1,6 @@
 # 知乎 11.10.0 (41012) 兼容性审查报告
 
-- 审查对象：知了模块 31 个 Hook（libxposed API 102）
+- 审查对象：知了模块 31 个 Hook（libxposed API 102；2026-10-20 增至 32 个，见 §七）
 - 审查方式：6 个并行子代理静态审查（javap 反汇编 + 整包常量池/字符串扫描，167486 个类）＋ 主代理真机实测（小米 2109119BC / Android 14 / LSPosed 2.2.0 / api=102）
 - 证据 JAR：`targetapp/jars/11.10.0 41012.jar`
 - 审查日期：2026-09-24
@@ -119,3 +119,24 @@
   真机验证（小米渠道包 + 官网包，各跑一轮）：两次冷启动内容逐字一致；下拉刷新内容变化；再冷启动与下拉后逐字一致。
   日志：`缓存冻结=…b.b#a`（小米）/ `…q0.x#n`（官网）→ `渲染 AppStart 的缓存内容` → `已拦截网络结果写回缓存` → `丢弃 AppStart 的网络结果（第 1 份）`。
   单测新增 `autoRefreshFreezesCacheOnEveryAuditJar`，对 11.10.0 的 market / 小米两份 JAR 断言缓存写入目标都能解析到。
+
+## 七、11.11.1 两处漏网广告（2026-10-20，知乎 11.11.1/41108 小米商店包）
+
+真机截图里还剩两处广告：推荐流顶部横贯整屏的「京东 11.11」广告栏，以及浮在内容右侧、带关闭按钮的「天猫」浮窗。查下来它们是两条完全不同的链路，都不经过信息流数据，所以按条目删广告的那套从来没碰过它们。
+
+1. **顶部广告栏不来自 FeedList**：`com.zhihu.android.ad_card` 是独立的广告卡片模块，feed 通过服务接口 `AdCardViewInterface#getAdCardView(回调, cardType)` 向它要一个 `AdFocusView`，拿回来自己插在列表最前面。
+   所以 `FeedAd` 里删 `FeedAdvert`、`interceptDataRange` 那几条对它无效。修法是在「要视图」这一步回 null：`AdCardViewInterfaceImpl` 里签名是 `void(回调接口, int)` 的那个方法（方法名跟接口走，参数类型才是稳的锚）。
+   真机日志：`[自检][命中] 去信息流广告 com.zhihu.android.ad_card.AdCardViewInterfaceImpl#getAdCardView`，列表顶部广告消失。
+2. **浮窗是「特形广告」里的彩蛋**：`com.zhihu.android.ad.special.AdEgg` 把图片和关闭按钮加进 DecorView（`removeFromDecorView` 对应着加），所以它浮在所有内容之上；
+   同族的 `AdFloat`（首屏浮层）、`AdFloatSecond`（二屏浮层）、`AdFloatVideo`（视频浮层）、`AdSearchFloatVideo`（搜索浮层）、`AdFeedEggManager`（推荐页彩蛋）共用一条数据链：
+   先请求 `commercial_api/app_float_layer`，再按 `float_layer / second_float_layer / feed_egg / search_middle_page` 分四份存成 `ad.special.b` 包里的单例配置。
+   展示前每个 presenter 都要问同一个继承来的 `initData(String)`「这个类型有没有数据」，所以新 Hook「去浮层广告」让它一律答 false；
+   推荐页彩蛋管理器另走一条路，它那组无参方法（`void()`）全部拦掉。
+   父类名是混淆的，presenter 名公开，所以顺着 presenter 的继承链取公开方法；注意父类里有**两个** `boolean(String)`：公开的 `initData` 和私有的 `isImageCached`，
+   按签名挑会挑错（第一版就装到 `isImageCached` 上了，靠一行"目标="日志发现），现在只认名字，单测也会断言挂到的确实是 `initData`。
+   真机日志：`[自检][命中] 去浮层广告 com.zhihu.android.ad.special.a#initData`；当天该设备已没有浮层数据（`initData` 全 false），浮窗的视觉回归要等下一次投放再确认。
+3. **云端巡检一直是红的，但跟混淆名无关**：`.github/workflows/compat-patrol.yml` 的校验步骤用 `$args = @('-ApkPath', ...)` 再 `@args` 展开——数组展开在 PowerShell 里是**位置参数**，
+   `-ApkPath` 会被当成值传进去，于是每次都报「找不到 APK：-ApkPath」，13 秒就失败，连包都没校验过。改成哈希表展开 `@{ ApkPath = 'zhihu.apk' }`。
+   另外仓库关了 Issues，失败时那步 `issues.create` 会再抛一次 `Issues has been disabled`，加个 `has_issues` 判断。
+   本地用同一份 APK 手动跑通：dex2jar 需要 8GB 堆（`_JAVA_OPTIONS=-Xmx8g`），`testDebugUnitTest` 三分包全绿。
+
