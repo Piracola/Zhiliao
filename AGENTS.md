@@ -32,6 +32,12 @@ $env:ZHILIAO_TEST_DIR = (Resolve-Path '.\targetapp\jars').Path; .\gradlew.bat te
 - **同一 versionCode 的不同渠道包混淆名不同**：`targetapp/jars` 里的审计 JAR 只代表那一份构建，改动必须真机验证。详见 `docs/DEVELOPMENT.md`。
 - 改动用户可见行为时同步 `README.md` 的功能列表；设置项写在 `app/src/main/java/com/shatyuka/zhiliao/MainActivity.kt` 的 `Catalog`（图标见 `tools/update-icons.mjs`，Lucide，ISC），新功能还要在 `HookStatus` 里登记「功能名 → 开关键」，否则定位失败时设置页不会置灰。
 
+## 发行说明
+
+- GitHub Release 的说明用书面文案：`- 功能名：说明。` 一句一条，只写用户可感知的变化，3～5 条封顶。
+- 不写实现细节、人称、口语与语气词，不贴 Full Changelog 链接；末尾单独一行 `适配基线：知乎 <版本>（<versionCode>）。`
+- 补发或修订旧版本的说明时沿用同一格式，`gh release edit <tag> --notes-file`。
+
 ## 当前状态
 
 - 现役 26.10.20；真机已验证：知乎 11.11.1/41108（小米商店包）、11.11.0/41106 小米渠道包与官网包，32/32 Hook 可用、Lucide 图标正常。
